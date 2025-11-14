@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot CAT</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">CAT Chatbot</div>
+        <div id="chat-box" class="chat-box"></div>
+
+        <div class="input-area">
+            <input type="text" id="mensaje" placeholder="Escribe un código (ej: 04 168)">
+            <button onclick="enviarMensaje()">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const chatBox = document.getElementById("chat-box");
+            const bienvenida = `
+                <div class='bot-msg'>
+                👋 <b>Hola, soy tu asistente CAT.</b><br><br>
+                Puedo ayudarte a interpretar fallas mediante códigos:<br>
+                • <b>FMI</b> – tipo de falla<br>
+                • <b>CID</b> – componente afectado<br>
+                • <b>MID</b> – módulo que reporta la falla<br><br>
+                Escríbeme por ejemplo:<br>
+                ➤ <b>04 168</b><br>
+                ➤ <b>FMI 04 CID 168</b><br>
+                ➤ <b>168.04</b><br><br>
+                Yo me encargo del resto.
+                </div>
+            `;
+            chatBox.innerHTML += bienvenida;
+        });
+
+        async function enviarMensaje() {
+            const input = document.getElementById("mensaje");
+            const chatBox = document.getElementById("chat-box");
+            const mensaje = input.value.trim();
+
+            if (!mensaje) return;
+
+            chatBox.innerHTML += `<div class='user-msg'>${mensaje}</div>`;
+            input.value = "";
+
+            const response = await fetch("/enviar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mensaje })
+            });
+
+            const data = await response.json();
+            const texto = data.respuesta.replace(/\n/g, "<br>");
+            chatBox.innerHTML += `<div class='bot-msg'>${texto}</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    </script>
+</body>
+</html>
