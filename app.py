@@ -89,7 +89,7 @@ def buscar_fmi(fmi):
     if not fmi:
         return None
     for fila in fmi_data:
-        if str(fila["FMI"]).zfill(2) == str(fmi).zfill(2):
+        if str(fila["FMI No."]).zfill(2) == str(fmi).zfill(2):
             return fila
     return None
 
@@ -115,8 +115,8 @@ def generar_respuesta(fmi, cid):
     mid = info_cid["MID"]
     mid_desc = info_cid["Description MID"]
 
-    fmi_desc = info_fmi["Description"]
-    causas = info_fmi["Causes"]
+    fmi_desc = info_fmi["Descripción de la falla"]
+    causas = info_fmi["Posibles causas"]
 
     return f"""
 🔧 <b>CÓDIGO DETECTADO</b><br>
