@@ -3,60 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatbot CAT</title>
+    <title>Asistente Técnico CAT</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">CAT Chatbot</div>
-        <div id="chat-box" class="chat-box"></div>
+    <div class="chat-page">
+        <div class="chat-container">
 
-        <div class="input-area">
-            <input type="text" id="mensaje" placeholder="Escribe un código (ej: 04 168)">
-            <button onclick="enviarMensaje()">Enviar</button>
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <div class="chat-avatar">
+                        <img src="{{ url_for('static', filename='img/logo_ferreyros.png') }}" class="avatar-img">
+                    </div>
+                    <div>
+                        <div class="chat-title">Asistente Técnico CAT</div>
+                        <div class="chat-subtitle">En línea • Soporte de códigos de falla</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="chat-box" class="chat-box"></div>
+
+            <div id="typing-indicator" class="typing hidden">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                <span class="typing-text">Asistente CAT está escribiendo...</span>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="mensaje" placeholder="Escribe hola para iniciar..." autocomplete="off">
+                <button onclick="enviarMensaje()">➤</button>
+            </div>
+
         </div>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const chatBox = document.getElementById("chat-box");
-            const bienvenida = `
-                <div class='bot-msg'>
-                👋 <b>Hola, soy tu asistente CAT.</b><br><br>
-                Puedo ayudarte a interpretar fallas mediante códigos:<br>
-                • <b>FMI</b> – tipo de falla<br>
-                • <b>CID</b> – componente afectado<br>
-                • <b>MID</b> – módulo que reporta la falla<br><br>
-                Escríbeme por ejemplo:<br>
-                ➤ <b>04 168</b><br>
-                ➤ <b>FMI 04 CID 168</b><br>
-                ➤ <b>168.04</b><br><br>
-                Yo me encargo del resto.
-                </div>
-            `;
-            chatBox.innerHTML += bienvenida;
-        });
+        const chatBox = document.getElementById("chat-box");
+        const typingIndicator = document.getElementById("typing-indicator");
+        const inputMensaje = document.getElementById("mensaje");
+
+        function addBotMessage(text) {
+            chatBox.innerHTML += `
+                <div class="bot-msg">
+                    <div class="bot-name">Asistente CAT</div>
+                    <div class="bot-text">${text}</div>
+                </div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function addUserMessage(text) {
+            chatBox.innerHTML += `
+                <div class="user-msg">
+                    <div class="user-text">${text}</div>
+                </div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function mostrarTyping() { typingIndicator.classList.remove("hidden"); }
+        function ocultarTyping() { typingIndicator.classList.add("hidden"); }
 
         async function enviarMensaje() {
-            const input = document.getElementById("mensaje");
-            const chatBox = document.getElementById("chat-box");
-            const mensaje = input.value.trim();
+            const msg = inputMensaje.value.trim();
+            if (!msg) return;
 
-            if (!mensaje) return;
+            addUserMessage(msg);
+            inputMensaje.value = "";
 
-            chatBox.innerHTML += `<div class='user-msg'>${mensaje}</div>`;
-            input.value = "";
+            mostrarTyping();
 
-            const response = await fetch("/enviar", {
+            const resp = await fetch("/enviar", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ mensaje })
+                body: JSON.stringify({ mensaje: msg })
             });
 
-            const data = await response.json();
-            const texto = data.respuesta.replace(/\n/g, "<br>");
-            chatBox.innerHTML += `<div class='bot-msg'>${texto}</div>`;
-            chatBox.scrollTop = chatBox.scrollHeight;
+            const data = await resp.json();
+            ocultarTyping();
+            addBotMessage(data.respuesta);
         }
     </script>
 </body>
