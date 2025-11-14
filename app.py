@@ -228,12 +228,31 @@ def enviar():
     saludos = ["hola", "holaa", "holaaa", "hi", "hello", "buenas"]
     if msg in saludos:
         session.clear()
-        session["state"] = "modelo"
+        session["state"] = "bienvenida"
         return jsonify({
-            "respuesta": "Perfecto. Dime el <b>MODELO</b> de la máquina."
+            "respuesta": (
+                "👋 <b>Hola, soy tu Asistente Técnico CAT.</b><br><br>"
+                "Puedo ayudarte a interpretar códigos de falla usando:<br>"
+                "• <b>FMI</b> – Tipo de falla<br>"
+                "• <b>CID</b> – Componente afectado<br>"
+                "• <b>MID</b> – Módulo que detecta la falla<br><br>"
+                "Para comenzar, necesito algunos datos de tu máquina.<br><br>"
+                "Cuando estés listo, envíame cualquier mensaje y empezamos."
+            )
         })
 
+    # ========================
+    # DESPUÉS DE LA BIENVENIDA
+    # ========================
+    if state == "bienvenida":
+        session["state"] = "modelo"
+        return jsonify({
+            "respuesta": "Perfecto. Dime el <b>MODELO</b> de la máquina (ej: 320D, 336, D6T...)."
+        })
+
+    # ========================
     # MODELO
+    # ========================
     if state == "modelo":
         session["modelo"] = msg.upper()
         session["state"] = "serie"
@@ -241,7 +260,9 @@ def enviar():
             "respuesta": "Anotado. Ahora dime la <b>SERIE</b> de la máquina."
         })
 
+    # ========================
     # SERIE
+    # ========================
     if state == "serie":
         session["serie"] = msg.upper()
         session["state"] = "cantidad"
@@ -249,24 +270,28 @@ def enviar():
             "respuesta": "Perfecto. ¿Cuántos <b>códigos de falla</b> deseas analizar?"
         })
 
-    # CANTIDAD
+    # ========================
+    # CANTIDAD CÓDIGOS
+    # ========================
     if state == "cantidad":
         try:
             n = int(msg)
             if n <= 0:
                 raise ValueError
         except:
-            return jsonify({"respuesta": "Debes indicar un número válido."})
-
+            return jsonify({"respuesta": "❗ Debes indicar un número válido (1, 2, 3...)."})
+        
         session["cantidad"] = n
         session["codigos"] = []
         session["actual"] = 1
         session["state"] = "codigo"
         return jsonify({
-            "respuesta": f"Envíame el <b>código 1</b> de {n} (Ej: 04 168)"
+            "respuesta": f"Perfecto. Envíame el <b>código 1</b> de {n} (Ej: 04 168, 168.04...)."
         })
 
-    # CÓDIGOS UNO A UNO
+    # ========================
+    # CÓDIGOS UNO POR UNO
+    # ========================
     if state == "codigo":
         actual = session["actual"]
         total = session["cantidad"]
@@ -303,10 +328,12 @@ def enviar():
             session["state"] = "pdf"
             return jsonify({
                 "respuesta": detalle +
-                             "<br><br>¿Deseas generar un <b>PDF</b>? (sí/no)"
+                             "<br><br>¿Deseas generar un <b>PDF</b> con todos los códigos? (sí/no)"
             })
 
+    # ========================
     # PDF
+    # ========================
     if state == "pdf":
         if msg in ["si", "sí", "yes", "y", "s"]:
             url_pdf = generar_pdf()
@@ -320,8 +347,9 @@ def enviar():
                 "respuesta": "Perfecto. Si deseas iniciar un nuevo análisis, escribe <b>hola</b>."
             })
 
+    # REINICIO POR SEGURIDAD
     session.clear()
-    return jsonify({"respuesta": "Reiniciemos. Escribe <b>hola</b>."})
+    return jsonify({"respuesta": "Reiniciemos. Escribe <b>hola</b> para empezar."})
 
 
 # ------------------------------------------------------
