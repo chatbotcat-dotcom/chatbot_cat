@@ -89,7 +89,9 @@ def buscar_fmi(fmi):
     if not fmi:
         return None
     for fila in fmi_data:
-        if str(fila["FMI No."]).zfill(2) == str(fmi).zfill(2):
+        # CORRECCIÓN DE NOMBRE PARA EVITAR KeyError
+        clave_fmi = list(fila.keys())[0]  # "FMI No."
+        if str(fila[clave_fmi]).zfill(2) == str(fmi).zfill(2):
             return fila
     return None
 
@@ -115,17 +117,19 @@ def generar_respuesta(fmi, cid):
     mid = info_cid["MID"]
     mid_desc = info_cid["Description MID"]
 
-    fmi_desc = info_fmi["Descripción de la falla"]
-    causas = info_fmi["Posibles causas"]
+    # ACEPTA CUALQUIER NOMBRE DE COLUMNA
+    claves_fmi = list(info_fmi.keys())
+    desc_fmi = info_fmi[claves_fmi[1]]
+    causas = info_fmi[claves_fmi[2]]
 
     return f"""
 🔧 <b>CÓDIGO DETECTADO</b><br>
-• <b>FMI {fmi}</b> — {fmi_desc}<br>
+• <b>FMI {fmi}</b> — {desc_fmi}<br>
 • <b>CID {cid}</b> — {cid_desc}<br>
 • <b>MID {mid}</b> — {mid_desc}<br><br>
 
 📌 <b>DESCRIPCIÓN TÉCNICA</b><br>
-<i>{fmi_desc}</i><br><br>
+<i>{desc_fmi}</i><br><br>
 
 🛠 <b>POSIBLES CAUSAS</b><br>
 {causas}
@@ -218,12 +222,12 @@ def enviar():
     msg = request.get_json()["mensaje"].strip().lower()
     state = session.get("state")
 
-    # Inicio solo con "hola"
-    if not state:
-        if msg not in ["hola", "hi", "hello", "buenas"]:
-            return jsonify({
-                "respuesta": "👋 Para iniciar escribe <b>hola</b>."
-            })
+    # ========================
+    # REINICIO GLOBAL CON HOLA
+    # ========================
+    saludos = ["hola", "holaa", "holaaa", "hi", "hello", "buenas"]
+    if msg in saludos:
+        session.clear()
         session["state"] = "modelo"
         return jsonify({
             "respuesta": "Perfecto. Dime el <b>MODELO</b> de la máquina."
@@ -242,7 +246,7 @@ def enviar():
         session["serie"] = msg.upper()
         session["state"] = "cantidad"
         return jsonify({
-            "respuesta": "Perfecto. ¿Cuántos <b>códigos de falla</b> quieres analizar?"
+            "respuesta": "Perfecto. ¿Cuántos <b>códigos de falla</b> deseas analizar?"
         })
 
     # CANTIDAD
@@ -270,11 +274,7 @@ def enviar():
         fmi, cid = extraer_codigos(msg)
         detalle = generar_respuesta(fmi, cid)
 
-        info = {
-            "entrada": msg,
-            "fmi": fmi,
-            "cid": cid
-        }
+        info = {"entrada": msg, "fmi": fmi, "cid": cid}
 
         c1 = buscar_cid(cid)
         c2 = buscar_fmi(fmi)
@@ -285,8 +285,9 @@ def enviar():
             info["mid_desc"] = c1["Description MID"]
 
         if c2:
-            info["fmi_desc"] = c2["Descripción de la falla"]
-            info["causas"] = c2["Posibles causas"]
+            claves = list(c2.keys())
+            info["fmi_desc"] = c2[claves[1]]
+            info["causas"] = c2[claves[2]]
 
         codigos = session["codigos"]
         codigos.append(info)
@@ -295,16 +296,14 @@ def enviar():
         if actual < total:
             session["actual"] += 1
             return jsonify({
-                "respuesta":
-                    detalle +
-                    f"<br><br>Envíame el <b>código {actual + 1}</b> de {total}."
+                "respuesta": detalle +
+                             f"<br><br>Envíame el <b>código {actual + 1}</b> de {total}."
             })
         else:
             session["state"] = "pdf"
             return jsonify({
-                "respuesta":
-                    detalle +
-                    "<br><br>¿Deseas generar un <b>PDF</b>? (sí/no)"
+                "respuesta": detalle +
+                             "<br><br>¿Deseas generar un <b>PDF</b>? (sí/no)"
             })
 
     # PDF
@@ -318,12 +317,11 @@ def enviar():
         else:
             session.clear()
             return jsonify({
-                "respuesta": "Perfecto. Si necesitas analizar otra máquina, escribe <b>hola</b>."
+                "respuesta": "Perfecto. Si deseas iniciar un nuevo análisis, escribe <b>hola</b>."
             })
 
-    # Reinicio seguro
     session.clear()
-    return jsonify({"respuesta": "Reiniciemos la conversación. Escribe <b>hola</b>."})
+    return jsonify({"respuesta": "Reiniciemos. Escribe <b>hola</b>."})
 
 
 # ------------------------------------------------------
