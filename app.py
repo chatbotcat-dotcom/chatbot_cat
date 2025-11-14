@@ -1,33 +1,52 @@
 from flask import Flask, render_template, request, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import json
+import os
 import re
 
 app = Flask(__name__)
 
-# -----------------------------------------
-#        CONFIGURACIÓN GOOGLE SHEETS
-# -----------------------------------------
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
+# ------------------------------------------------------
+#  CARGA DE CREDENCIALES (LOCAL vs RENDER)
+# ------------------------------------------------------
 
-creds = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", scope)
-client = gspread.authorize(creds)
+def get_google_credentials():
+    """
+    Si estamos en Render → GOOGLE_CREDENTIALS (env variable)
+    Si estamos en local → credenciales.json (archivo)
+    """
+    if "GOOGLE_CREDENTIALS" in os.environ:
+        print("Usando credenciales desde variable de entorno (Render).")
+        credentials_json = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+    else:
+        print("Usando credenciales desde archivo local.")
+        with open("credenciales.json") as f:
+            credentials_json = json.load(f)
 
-# Abrir las dos hojas correctas
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_json, [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
+    ])
+    return gspread.authorize(creds)
+
+client = get_google_credentials()
+
+# ------------------------------------------------------
+# LEER HOJAS DE GOOGLE SHEETS
+# ------------------------------------------------------
+
 cid_sheet = client.open("Codigos_de_Error_CAT_2").worksheet("CID")
 fmi_sheet = client.open("Codigos_de_Error_CAT_2").worksheet("FMI")
 
-# Convertir en listas de diccionarios
 cid_data = cid_sheet.get_all_records()
 fmi_data = fmi_sheet.get_all_records()
 
 
-# -----------------------------------------
-#     FUNCIÓN PARA EXTRAER FMI + CID
-# -----------------------------------------
+# ------------------------------------------------------
+# EXTRACCIÓN DE CÓDIGOS (FMI + CID)
+# ------------------------------------------------------
+
 def extraer_codigos(texto):
     texto = texto.upper().replace("-", " ").replace(".", " ")
 
@@ -54,62 +73,55 @@ def extraer_codigos(texto):
     return fmi, cid
 
 
-# -----------------------------------------
-#     BUSCAR EN LA HOJA CID
-# -----------------------------------------
+# ------------------------------------------------------
+# BUSCAR CID Y FMI
+# ------------------------------------------------------
+
 def buscar_cid(cid):
     for fila in cid_data:
         if str(fila["CDI"]).zfill(3) == str(cid).zfill(3):
             return fila
     return None
 
-
-# -----------------------------------------
-#     BUSCAR EN LA HOJA FMI
-# -----------------------------------------
 def buscar_fmi(fmi):
     for fila in fmi_data:
-        if str(fila["FMI"]).zfill(2) == str(fmi).zfill(2):
+        if str(fila["FMI No."]).zfill(2) == str(fmi).zfill(2):
             return fila
     return None
 
 
-# -----------------------------------------
-#     GENERAR RESPUESTA PROFESIONAL CAT
-# -----------------------------------------
+# ------------------------------------------------------
+# RESPUESTA TÉCNICA FORMATEADA (ESTILO CAT)
+# ------------------------------------------------------
+
 def generar_respuesta(fmi, cid):
 
-    # Validaciones
     if not fmi and not cid:
-        return "❌ No pude detectar ningún FMI ni CID. Intenta algo como: 04 168"
+        return "❌ No pude detectar FMI ni CID. Intenta algo como: 04 168"
 
     if fmi and not cid:
-        return "🔎 Detecté el FMI **{}**, pero falta el CID (componente). Escríbeme algo como: 04 168".format(fmi)
+        return f"🔍 Detecté FMI {fmi}, pero falta el CID. Ejemplo: 04 168"
 
     if cid and not fmi:
-        return "🔎 Detecté el CID **{}**, pero falta el FMI (modo de falla). Escríbeme algo como: 04 168".format(cid)
+        return f"🔍 Detecté CID {cid}, pero falta el FMI. Ejemplo: 04 168"
 
-    # Buscar datos
     info_cid = buscar_cid(cid)
     info_fmi = buscar_fmi(fmi)
 
     if not info_cid:
-        return f"❌ El CID {cid} no existe en la base de datos."
-
+        return f"❌ CID {cid} no encontrado en la base de datos."
     if not info_fmi:
-        return f"❌ El FMI {fmi} no existe en la base de datos."
+        return f"❌ FMI {fmi} no encontrado en la base de datos."
 
-    # Extraer datos
+    # Datos del CID
     cid_desc = info_cid["Description"]
     mid = info_cid["MID"]
     mid_desc = info_cid["Description MID"]
 
-    fmi_desc = info_fmi["Description"]
-    causas = info_fmi["Causes"]
+    # Datos del FMI
+    fmi_desc = info_fmi["Descripción de la falla"]
+    causas = info_fmi["Posibles causas"]
 
-    # ------------------------------
-    #      RESPUESTA FORMADA
-    # ------------------------------
     respuesta = f"""
 🔧 <b>CÓDIGO DETECTADO</b><br>
 • <b>FMI {str(fmi).zfill(2)}</b> — {fmi_desc}<br>
@@ -117,42 +129,39 @@ def generar_respuesta(fmi, cid):
 • <b>MID {mid}</b> — {mid_desc}<br><br>
 
 📌 <b>DESCRIPCIÓN TÉCNICA</b><br>
-El módulo <b>{mid_desc}</b> reporta que el componente <b>{cid_desc}</b> presenta: <br>
+El módulo <b>{mid_desc}</b> reporta que el componente <b>{cid_desc}</b> presenta:<br>
 👉 <i>{fmi_desc}</i><br><br>
 
 🛠 <b>POSIBLES CAUSAS</b><br>
 {causas}<br><br>
 
-¿Deseas una explicación <b>simple</b>, <b>técnica</b> o los <b>pasos de diagnóstico</b>?
+¿Quieres explicación <b>simple</b>, <b>técnica</b> o <b>diagnóstico</b>?
 """
-
     return respuesta
 
 
-# -----------------------------------------
-#      RUTA PRINCIPAL
-# -----------------------------------------
+# ------------------------------------------------------
+# RUTAS FLASK
+# ------------------------------------------------------
+
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
-# -----------------------------------------
-#      PROCESAR MENSAJE DEL CHAT
-# -----------------------------------------
 @app.route("/enviar", methods=["POST"])
 def enviar():
     data = request.get_json()
-    msg = data["mensaje"]
+    mensaje_usuario = data["mensaje"]
 
-    fmi, cid = extraer_codigos(msg)
+    fmi, cid = extraer_codigos(mensaje_usuario)
     respuesta = generar_respuesta(fmi, cid)
 
     return jsonify({"respuesta": respuesta})
 
 
-# -----------------------------------------
-#      EJECUCIÓN LOCAL
-# -----------------------------------------
+# ------------------------------------------------------
+# EJECUCIÓN LOCAL
+# ------------------------------------------------------
+
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)
