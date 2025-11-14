@@ -63,24 +63,34 @@
         function ocultarTyping() { typingIndicator.classList.add("hidden"); }
 
         async function enviarMensaje() {
-            const msg = inputMensaje.value.trim();
-            if (!msg) return;
+    const msg = inputMensaje.value.trim();
+    if (!msg) return;
 
-            addUserMessage(msg);
-            inputMensaje.value = "";
+    addUserMessage(msg);
+    inputMensaje.value = "";
 
-            mostrarTyping();
+    // ===== IA REALISTA: calcular duración del "typing" =====
+    const palabras = msg.split(" ").length;
+    let typingDelay = palabras * 120;   // 120 ms por palabra
+    typingDelay = Math.min(typingDelay, 2500); // límite máximo 2.5s
 
-            const resp = await fetch("/enviar", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ mensaje: msg })
-            });
+    mostrarTyping();
 
-            const data = await resp.json();
-            ocultarTyping();
-            addBotMessage(data.respuesta);
-        }
+    // Espera el tiempo de typing realista ANTES de llamar al servidor
+    await new Promise(resolve => setTimeout(resolve, typingDelay));
+
+    // ===== Llamada real al servidor =====
+    const resp = await fetch("/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mensaje: msg })
+    });
+
+    const data = await resp.json();
+
+    ocultarTyping();
+    addBotMessage(data.respuesta);
+}
     </script>
 </body>
 </html>
