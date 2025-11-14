@@ -1,4 +1,5 @@
-flask
-twilio
-gspread
-oauth2client
+Flask==3.0.0
+gunicorn==21.2.0
+gspread==6.0.0
+oauth2client==4.1.3
+reportlab==4.2.0
