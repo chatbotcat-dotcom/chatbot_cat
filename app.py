@@ -107,7 +107,7 @@ def query_codigo(model, serial3, cid, fmi):
           AND fmi = %s
     """
     conn = get_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
     cur.execute(sql, (model, serial3, cid, fmi))
     rows = cur.fetchall()
     cur.close()
