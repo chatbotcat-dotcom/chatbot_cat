@@ -109,10 +109,14 @@ def query_codigo(model, serial3, cid, fmi):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(sql, (model, serial3, cid, fmi))
-    rows = cur.fetchall()
+
+    cols = [col[0] for col in cur.description]
+    rows = [dict(zip(cols, row)) for row in cur.fetchall()]
+
     cur.close()
     conn.close()
     return rows
+
 
 def query_evento(model, serial3, eid, level):
     sql = """
@@ -124,12 +128,16 @@ def query_evento(model, serial3, eid, level):
           AND level = %s
     """
     conn = get_conn()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur = conn.cursor()
     cur.execute(sql, (model, serial3, eid, level))
-    rows = cur.fetchall()
+
+    cols = [col[0] for col in cur.description]
+    rows = [dict(zip(cols, row)) for row in cur.fetchall()]
+
     cur.close()
     conn.close()
     return rows
+
 
 # ============================================================
 #  RUTA PRINCIPAL
