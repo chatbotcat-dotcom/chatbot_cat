@@ -1,3 +1,5 @@
+# actualizado 2025-11-27
+
 from flask import Flask, render_template, request, jsonify
 import psycopg2
 from psycopg2.extras import RealDictCursor
