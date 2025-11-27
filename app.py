@@ -1,334 +1,409 @@
-from flask import Flask, render_template, request, jsonify, session, url_for
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import json
-import os
+from flask import Flask, render_template, request, jsonify
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import re
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from datetime import datetime
+import os
 
 app = Flask(__name__)
-app.secret_key = "cat_chatbot_super_secreto_123"
 
+# ============================================================
+#  CONEXIÓN A POSTGRES (psycopg2, sin async)
+# ============================================================
 
-# ------------------------------------------------------
-#  CARGA DE CREDENCIALES (LOCAL vs RENDER)
-# ------------------------------------------------------
+def get_conn():
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL no está configurado.")
+    return psycopg2.connect(db_url, sslmode="require")
 
-def get_google_credentials():
-    if "GOOGLE_CREDENTIALS" in os.environ:
-        credentials_json = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+# ============================================================
+#  SESIONES DEL CHAT
+# ============================================================
+
+sesiones = {}
+
+def obtener_sesion(user_id):
+    if user_id not in sesiones:
+        sesiones[user_id] = {
+            "estado": "inicio",
+            "model": None,
+            "serial3": None,
+            "enviar_segunda_bienvenida": True   # para dividir mensaje de bienvenida
+        }
+    return sesiones[user_id]
+
+def resetear_sesion(user_id):
+    if user_id in sesiones:
+        del sesiones[user_id]
+
+# ============================================================
+#  PARSEO DE CÓDIGOS
+# ============================================================
+
+def extraer_codigo(texto: str):
+    t = texto.upper().replace("-", " ").replace(".", " ")
+    nums = re.findall(r"\d+", t)
+
+    if len(nums) >= 3:
+        mid, cid, fmi = nums[-3], nums[-2], nums[-1]
+        return mid, cid, fmi
+
+    if len(nums) == 2:
+        cid, fmi = nums
+        return None, cid, fmi
+
+    return None, None, None
+
+# ============================================================
+#  PARSEO DE EVENTOS
+# ============================================================
+
+def extraer_evento(texto: str):
+    t = texto.upper().replace("-", " ")
+
+    # Buscar número de evento: 3 o 4 dígitos, con o sin 'E'
+    match_evento = re.search(r"(?:E)?(\d{3,4})", t)
+    if not match_evento:
+        return None, None
+    eid = f"E{match_evento.group(1)}"
+
+    # Buscar nivel: entre paréntesis o como "nivel X"
+    match_nivel = re.search(r"\((\d{1,2})\)", t)
+    if match_nivel:
+        level = match_nivel.group(1)
     else:
-        with open("credenciales.json") as f:
-            credentials_json = json.load(f)
+        match_nivel2 = re.search(r"NIVEL\s*(\d{1,2})", t)
+        level = match_nivel2.group(1) if match_nivel2 else None
 
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_json, [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
-    ])
-    return gspread.authorize(creds)
-
-client = get_google_credentials()
+    return eid, level
 
 
-# ------------------------------------------------------
-# LEER HOJAS DE GOOGLE SHEETS
-# ------------------------------------------------------
+# ============================================================
+#  QUERIES A BD
+# ============================================================
 
-cid_sheet = client.open("Codigos_de_Error_CAT_2").worksheet("CID")
-fmi_sheet = client.open("Codigos_de_Error_CAT_2").worksheet("FMI")
+def query_codigo(model, serial3, cid, fmi):
+    sql = """
+        SELECT description, causes, url
+        FROM codigos_falla
+        WHERE model = %s
+          AND LEFT(serial, 3) = %s
+          AND cid = %s
+          AND fmi = %s
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(sql, (model, serial3, cid, fmi))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
 
-cid_data = cid_sheet.get_all_records()
-fmi_data = fmi_sheet.get_all_records()
+def query_evento(model, serial3, eid, level):
+    sql = """
+        SELECT warning_description, url_main
+        FROM eventos
+        WHERE model = %s
+          AND LEFT(serial, 3) = %s
+          AND eid = %s
+          AND level = %s
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(sql, (model, serial3, eid, level))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
 
-
-# ------------------------------------------------------
-# EXTRAER FMI + CID
-# ------------------------------------------------------
-
-def extraer_codigos(texto):
-    texto = texto.upper().replace("-", " ").replace(".", " ")
-
-    fmi = None
-    cid = None
-
-    match_fmi = re.search(r"FMI\s*(\d{1,2})", texto)
-    if match_fmi:
-        fmi = match_fmi.group(1)
-    else:
-        m = re.findall(r"\b(\d{1,2})\b", texto)
-        if m:
-            fmi = m[-1]
-
-    match_cid = re.search(r"CID\s*(\d{3,4})", texto)
-    if match_cid:
-        cid = match_cid.group(1)
-    else:
-        m = re.findall(r"\b(\d{3,4})\b", texto)
-        if m:
-            cid = m[0]
-
-    return fmi, cid
-
-
-# ------------------------------------------------------
-# BUSCAR CID + FMI
-# ------------------------------------------------------
-
-def buscar_cid(cid):
-    if not cid:
-        return None
-    for fila in cid_data:
-        if str(fila["CDI"]).zfill(3) == str(cid).zfill(3):
-            return fila
-    return None
-
-
-def buscar_fmi(fmi):
-    if not fmi:
-        return None
-    for fila in fmi_data:
-        if str(fila["FMI No."]).zfill(2) == str(fmi).zfill(2):
-            return fila
-    return None
-
-
-# ------------------------------------------------------
-# RESPUESTA AL CÓDIGO
-# ------------------------------------------------------
-
-def generar_respuesta(fmi, cid):
-
-    if not fmi or not cid:
-        return "❌ No detecté un código válido. Ejemplo: <b>04 168</b>"
-
-    info_cid = buscar_cid(cid)
-    info_fmi = buscar_fmi(fmi)
-
-    if not info_cid:
-        return f"❌ CID <b>{cid}</b> no encontrado."
-    if not info_fmi:
-        return f"❌ FMI <b>{fmi}</b> no encontrado."
-
-    cid_desc = info_cid["Description"]
-    mid = info_cid["MID"]
-    mid_desc = info_cid["Description MID"]
-
-    fmi_desc = info_fmi["Descripción de la falla"]
-    causas = info_fmi["Posibles causas"]
-
-    return f"""
-🔧 <b>CÓDIGO DETECTADO</b><br>
-• <b>FMI {fmi}</b> — {fmi_desc}<br>
-• <b>CID {cid}</b> — {cid_desc}<br>
-• <b>MID {mid}</b> — {mid_desc}<br><br>
-
-📌 <b>DESCRIPCIÓN TÉCNICA</b><br>
-<i>{fmi_desc}</i><br><br>
-
-🛠 <b>POSIBLES CAUSAS</b><br>
-{causas}
-"""
-
-
-# ------------------------------------------------------
-# GENERAR PDF
-# ------------------------------------------------------
-
-def generar_pdf():
-    modelo = session.get("modelo")
-    serie = session.get("serie")
-    codigos = session.get("codigos", [])
-
-    reports_dir = os.path.join(app.static_folder, "reportes")
-    os.makedirs(reports_dir, exist_ok=True)
-
-    filename = f"Reporte_{serie}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    filepath = os.path.join(reports_dir, filename)
-
-    c = canvas.Canvas(filepath, pagesize=letter)
-    w, h = letter
-    y = h - 50
-
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, y, "REPORTE DE CÓDIGOS DE FALLA - CAT")
-    y -= 40
-
-    c.setFont("Helvetica", 12)
-    c.drawString(50, y, f"Modelo: {modelo}")
-    y -= 20
-    c.drawString(50, y, f"Serie:  {serie}")
-    y -= 40
-
-    for idx, code in enumerate(codigos, start=1):
-
-        if y < 80:
-            c.showPage()
-            c.setFont("Helvetica", 12)
-            y = h - 50
-
-        entrada = code["entrada"]
-        fmi = code["fmi"]
-        cid = code["cid"]
-        fmi_desc = code.get("fmi_desc", "")
-        cid_desc = code.get("cid_desc", "")
-        mid = code.get("mid", "")
-        mid_desc = code.get("mid_desc", "")
-        causas = code.get("causas", "")
-
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, y, f"Código {idx}: {entrada}")
-        y -= 18
-
-        c.setFont("Helvetica", 11)
-        c.drawString(60, y, f"FMI {fmi}: {fmi_desc}")
-        y -= 14
-        c.drawString(60, y, f"CID {cid}: {cid_desc}")
-        y -= 14
-        c.drawString(60, y, f"MID {mid}: {mid_desc}")
-        y -= 14
-
-        from textwrap import wrap
-        for linea in wrap("Causas: " + causas, 90):
-            c.drawString(60, y, linea)
-            y -= 14
-
-        y -= 20
-
-    c.save()
-    return url_for("static", filename=f"reportes/{filename}", _external=True)
-
-
-# ------------------------------------------------------
-# RUTA PRINCIPAL
-# ------------------------------------------------------
+# ============================================================
+#  RUTA PRINCIPAL
+# ============================================================
 
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
-# ------------------------------------------------------
-# MANEJO DEL CHAT
-# ------------------------------------------------------
+# ============================================================
+#  CHATBOT
+# ============================================================
 
 @app.route("/enviar", methods=["POST"])
 def enviar():
-    msg = request.get_json()["mensaje"].strip().lower()
-    state = session.get("state")
+    data = request.get_json()
+    mensaje = data.get("mensaje", "").strip()
+    user_id = "usuario_unico"
 
-    # Inicio solo con "hola"
-    if not state:
-        if msg not in ["hola", "hi", "hello", "buenas"]:
-            return jsonify({
-                "respuesta": "👋 Para iniciar escribe <b>hola</b>."
-            })
-        session["state"] = "modelo"
-        return jsonify({
-            "respuesta": "Perfecto. Dime el <b>MODELO</b> de la máquina."
-        })
+    ses = obtener_sesion(user_id)
+    estado = ses["estado"]
+    mensaje_lower = mensaje.lower()
 
-    # MODELO
-    if state == "modelo":
-        session["modelo"] = msg.upper()
-        session["state"] = "serie"
-        return jsonify({
-            "respuesta": "Anotado. Ahora dime la <b>SERIE</b> de la máquina."
-        })
+    # ========================================================
+    # 1) MENSAJE DE BIENVENIDA (DOS PARTES)
+    # ========================================================
+    if estado == "inicio":
+        respuesta1 = (
+            "👋 Hola, soy <b>FerreyDoc</b>, tu asistente técnico CAT.\n\n"
+            "Puedo ayudarte a interpretar <b>códigos de falla</b> (CID/FMI) "
+            "y <b>eventos</b> (EID/Level) utilizando la base de datos técnica."
+        )
 
-    # SERIE
-    if state == "serie":
-        session["serie"] = msg.upper()
-        session["state"] = "cantidad"
-        return jsonify({
-            "respuesta": "Perfecto. ¿Cuántos <b>códigos de falla</b> quieres analizar?"
-        })
+        respuesta2 = (
+            "Antes de continuar, ¿Está de acuerdo en compartir infomración sobre su equipo?:\n\n"
+            "1️⃣ Sí, acepto compartir modelo y serie\n"
+            "2️⃣ No, deseo cancelar"
+        )
 
-    # CANTIDAD
-    if state == "cantidad":
-        try:
-            n = int(msg)
-            if n <= 0:
-                raise ValueError
-        except:
-            return jsonify({"respuesta": "Debes indicar un número válido."})
+        ses["estado"] = "esperando_consentimiento"
+        return jsonify({"respuesta": respuesta1 + "\n\n" + respuesta2})
 
-        session["cantidad"] = n
-        session["codigos"] = []
-        session["actual"] = 1
-        session["state"] = "codigo"
-        return jsonify({
-            "respuesta": f"Envíame el <b>código 1</b> de {n} (Ej: 04 168)"
-        })
+    # ========================================================
+    # 2) CONSENTIMIENTO — OPCIONES 1 / 2
+    # ========================================================
+    if estado == "esperando_consentimiento":
 
-    # CÓDIGOS UNO A UNO
-    if state == "codigo":
-        actual = session["actual"]
-        total = session["cantidad"]
-
-        fmi, cid = extraer_codigos(msg)
-        detalle = generar_respuesta(fmi, cid)
-
-        info = {
-            "entrada": msg,
-            "fmi": fmi,
-            "cid": cid
-        }
-
-        c1 = buscar_cid(cid)
-        c2 = buscar_fmi(fmi)
-
-        if c1:
-            info["cid_desc"] = c1["Description"]
-            info["mid"] = c1["MID"]
-            info["mid_desc"] = c1["Description MID"]
-
-        if c2:
-            info["fmi_desc"] = c2["Descripción de la falla"]
-            info["causas"] = c2["Posibles causas"]
-
-        codigos = session["codigos"]
-        codigos.append(info)
-        session["codigos"] = codigos
-
-        if actual < total:
-            session["actual"] += 1
+        if mensaje == "1":
+            ses["estado"] = "pidiendo_modelo"
             return jsonify({
                 "respuesta":
-                    detalle +
-                    f"<br><br>Envíame el <b>código {actual + 1}</b> de {total}."
+                "Perfecto 🙌.\n\n"
+                "Por favor indícame el <b>MODELO</b> de la máquina.\n"
+                "Ejemplo: <b>950H</b>, <b>320D</b>, <b>777G</b>."
             })
-        else:
-            session["state"] = "pdf"
+
+        if mensaje == "2":
+            resetear_sesion(user_id)
             return jsonify({
-                "respuesta":
-                    detalle +
-                    "<br><br>¿Deseas generar un <b>PDF</b>? (sí/no)"
+                "respuesta": "Entendido 👍. Si deseas retomar luego, solo escribe <b>hola</b>."
             })
 
-    # PDF
-    if state == "pdf":
-        if msg in ["si", "sí", "yes", "y", "s"]:
-            url_pdf = generar_pdf()
-            session.clear()
+        return jsonify({"respuesta": "Por favor, responde <b>1</b> o <b>2</b> 😊."})
+
+    # ========================================================
+    # 3) PIDIENDO MODELO
+    # ========================================================
+    if estado == "pidiendo_modelo":
+        ses["model"] = mensaje.upper()
+        ses["estado"] = "pidiendo_serie"
+
+        return jsonify({
+            "respuesta": (
+                f"Modelo registrado: <b>{ses['model']}</b> ✅\n\n"
+                "Ahora ingresa los <b>primeros 3 dígitos de la serie</b>.\n"
+                "Ejemplo: <b>4YS</b>, <b>C7R</b>, <b>KJG</b>."
+            )
+        })
+
+    # ========================================================
+    # 4) PIDIENDO SERIE
+    # ========================================================
+    if estado == "pidiendo_serie":
+        ses["serial3"] = mensaje[:3].upper()
+        ses["estado"] = "menu_principal"
+
+        return jsonify({
+            "respuesta": (
+                "✔️ Datos registrados:\n"
+                f"• Modelo: <b>{ses['model']}</b>\n"
+                f"• Serie: <b>{ses['serial3']}</b>\n\n"
+                "¿Qué deseas hacer ahora?\n\n"
+                "1️⃣ Interpretar códigos de falla\n"
+                "2️⃣ Interpretar eventos\n"
+                "3️⃣ Diferencia entre código y evento\n"
+                "4️⃣ Recomendaciones de inspección diaria\n"
+                "5️⃣ Cambiar de máquina\n"
+                "6️⃣ Finalizar conversación"
+            )
+        })
+
+    # ========================================================
+    # 5) MENÚ PRINCIPAL
+    # ========================================================
+    if estado == "menu_principal":
+
+        if mensaje == "1":
+            ses["estado"] = "pidiendo_codigos"
             return jsonify({
-                "respuesta": f"📄 Aquí está tu reporte:<br><a href='{url_pdf}' target='_blank'>Descargar PDF</a>"
+                "respuesta": (
+                    "🔧 Ingresa los <b>códigos de falla</b>.\n\n"
+                    "Formatos permitidos:\n"
+                    "• <code>168 04</code>\n"
+                    "• <code>28 168 04</code>\n"
+                    "• <code>168-04</code>\n\n"
+                    "Puedes ingresar varios separados por coma."
+                )
             })
-        else:
-            session.clear()
+
+        if mensaje == "2":
+            ses["estado"] = "pidiendo_eventos"
             return jsonify({
-                "respuesta": "Perfecto. Si necesitas analizar otra máquina, escribe <b>hola</b>."
+                "respuesta": (
+                    "📘 Ingresa los <b>eventos</b>.\n\n"
+                    "Formatos permitidos:\n"
+                    "• <code>E0117</code>\n"
+                    "• <code>0117 (2)</code>\n"
+                    "• <code>E0117 nivel 2</code>\n\n"
+                    "Puedes ingresar varios separados por coma."
+                )
             })
 
-    # Reinicio seguro
-    session.clear()
-    return jsonify({"respuesta": "Reiniciemos la conversación. Escribe <b>hola</b>."})
+        if mensaje == "3":
+            return jsonify({
+                "respuesta": (
+                    "🟡 Te explico:\n\n"
+                    "🔧 <b>Código de falla (CID/FMI)</b>\n"
+                    "→ Indica una condición anómala en un <b>sensor o actuador</b>.\n\n"
+                    "📘 <b>Evento (EID/Level)</b>\n"
+                    "→ Registra una <b>condición de operación</b> que afecta al sistema.\n\n"
+                    "¿Qué deseas hacer ahora?\n"
+                    "1️⃣ Códigos de falla\n"
+                    "2️⃣ Eventos\n"
+                    "6️⃣ Finalizar"
+                )
+            })
+
+        if mensaje == "4":
+            return jsonify({
+                "respuesta": (
+                    "🛠️ <b>Inspección diaria recomendada</b>\n"
+                    "• Revisar niveles de fluidos\n"
+                    "• Buscar fugas visibles\n"
+                    "• Verificar funcionamiento eléctrico\n"
+                    "• Revisar estado estructural\n\n"
+                    "¿Qué deseas hacer?\n"
+                    "1️⃣ Códigos de falla\n"
+                    "2️⃣ Eventos\n"
+                    "6️⃣ Finalizar"
+                )
+            })
+
+        if mensaje == "5":
+            ses["estado"] = "pidiendo_modelo"
+            ses["model"] = None
+            ses["serial3"] = None
+            return jsonify({"respuesta": "Por favor ingresa el <b>nuevo MODELO</b>."})
+
+        if mensaje == "6":
+            resetear_sesion(user_id)
+            return jsonify({"respuesta": "Gracias por usar FerreyDoc 🤝. ¡Vuelve cuando quieras!"})
+
+        return jsonify({"respuesta": "Elige una opción del <b>1</b> al <b>6</b>."})
+
+    # ========================================================
+    # 6) PROCESAR CÓDIGOS
+    # ========================================================
+    if estado == "pidiendo_codigos":
+
+        model = ses["model"]
+        serial3 = ses["serial3"]
+        codigos = mensaje.split(",")
+        respuestas = []
+
+        for raw in codigos:
+            raw = raw.strip()
+            if not raw:
+                continue
+
+            mid, cid, fmi = extraer_codigo(raw)
+
+            if not cid or not fmi:
+                respuestas.append(f"❌ No pude interpretar <code>{raw}</code>.")
+                continue
+
+            filas = query_codigo(model, serial3, cid, fmi)
+
+            if not filas:
+                respuestas.append(
+                    f"❌ No encontré resultados para CID {cid} / FMI {fmi} "
+                    f"(<code>{raw}</code>)."
+                )
+                continue
+
+            fila = filas[0]
+
+            desc = fila["description"] or "Sin descripción."
+            causas = fila["causes"] or "Sin causas registradas."
+            url = fila["url"] or "Sin URL disponible."
+
+            respuestas.append(
+                f"🔧 <b>Código analizado:</b> <code>{raw}</code>\n\n"
+                f"<b>Descripción:</b>\n{desc}\n\n"
+                f"<b>Causas posibles:</b>\n{causas}\n\n"
+                f"<b>Para más información o para realizar Test de descarte de causas menores ingresar por favor a:</b>\n<a href='{url}' target='_blank'>{url}</a>\n"
+
+            )
+
+        ses["estado"] = "menu_principal"
+
+        respuestas.append(
+            "¿Qué deseas hacer ahora?\n"
+            "1️⃣ Más códigos\n"
+            "2️⃣ Eventos\n"
+            "5️⃣ Cambiar máquina\n"
+            "6️⃣ Finalizar"
+        )
+
+        return jsonify({"respuesta": "\n\n".join(respuestas)})
+
+    # ========================================================
+    # 7) PROCESAR EVENTOS
+    # ========================================================
+    if estado == "pidiendo_eventos":
+
+        model = ses["model"]
+        serial3 = ses["serial3"]
+        eventos = mensaje.split(",")
+        respuestas = []
+
+        for raw in eventos:
+            raw = raw.strip()
+            if not raw:
+                continue
+
+            eid, level = extraer_evento(raw)
+            level = level or "2"
+
+            filas = query_evento(model, serial3, eid, level)
+
+            if not filas:
+                respuestas.append(
+                    f"❌ No encontré información para <b>{eid}</b> nivel <b>{level}</b> "
+                    f"(<code>{raw}</code>)."
+                )
+                continue
+
+            fila = filas[0]
+
+            desc = fila["warning_description"] or "Sin descripción registrada."
+            url = fila["url_main"] or "Sin URL disponible."
+
+            respuestas.append(
+                f"📘 <b>Evento analizado:</b> <code>{raw}</code>\n\n"
+                f"<b>Descripción:</b>\n{desc}\n\n"
+                f"<b>Para más información por favor consultar a:</b> <a href='{url}' target='_blank'>{url}</a>\n"
+
+            )
+
+        ses["estado"] = "menu_principal"
+
+        respuestas.append(
+            "¿Qué deseas hacer ahora?\n"
+            "1️⃣ Códigos de falla\n"
+            "2️⃣ Más eventos\n"
+            "5️⃣ Cambiar máquina\n"
+            "6️⃣ Finalizar"
+        )
+
+        return jsonify({"respuesta": "\n\n".join(respuestas)})
+
+    # ========================================================
+    # 8) FALLBACK
+    # ========================================================
+    return jsonify({"respuesta": "No entendí 😅. Escribe <b>hola</b> para reiniciar."})
 
 
-# ------------------------------------------------------
-# EJECUCIÓN LOCAL
-# ------------------------------------------------------
-
+# ============================================================
+# MAIN
+# ============================================================
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000)
