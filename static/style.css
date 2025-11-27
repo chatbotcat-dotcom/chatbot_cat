@@ -1,0 +1,192 @@
+/* actualizado hola=? */
+/* GENERAL */
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: #111;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto;
+}
+
+/* PAGE */
+.chat-page {
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* CONTAINER */
+.chat-container {
+    width: 100%;
+    max-width: 420px;
+    height: 90vh;
+    background: #fff;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 2px solid #FFCD00;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+
+/* HEADER */
+.chat-header {
+    background: black;
+    color: white;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+}
+
+.chat-header-left {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.chat-avatar {
+    width: 38px; height: 38px;
+    background: #FFCD00;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.avatar-img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+}
+
+.chat-title {
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.chat-subtitle {
+    font-size: 11px;
+    color: #ccc;
+}
+
+/* CHAT BOX */
+.chat-box {
+    flex: 1;
+    background: #EFEFEF;
+    padding: 12px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+
+    /* Previene scroll horizontal */
+    overflow-x: hidden;
+}
+
+/* MENSAJES DEL USUARIO */
+.user-msg {
+    text-align: right;
+    margin: 8px 0;
+}
+
+.user-text {
+    display: inline-block;
+    background: #FFCD00;
+    color: black;
+    padding: 9px 12px;
+    border-radius: 18px 18px 4px 18px;
+    font-size: 14px;
+
+    /* rompe líneas largas */
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+/* MENSAJES BOT */
+.bot-msg {
+    margin: 8px 0;
+}
+
+.bot-name {
+    font-size: 11px;
+    color: #777;
+    margin-bottom: 2px;
+    padding-left: 4px;
+}
+
+.bot-text {
+    display: inline-block;
+    background: white;
+    padding: 9px 12px;
+    border-radius: 18px 18px 18px 4px;
+    border: 1px solid #ddd;
+    color: #222;
+    font-size: 14px;
+    max-width: 100%;
+
+    /* rompe texto largo y elimina scroll horizontal */
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* TYPING */
+.typing {
+    padding: 8px 12px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    background: #f1f1f1;
+    border-top: 1px solid #ddd;
+}
+
+.hidden { display: none !important; }
+
+.dot {
+    width: 7px; height: 7px;
+    background: #777;
+    border-radius: 50%;
+    animation: blink 1s infinite;
+}
+
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes blink {
+    0%, 100% { opacity: .2; }
+    40% { opacity: 1; }
+}
+
+/* INPUT AREA */
+.input-area {
+    padding: 10px;
+    background: #f2f2f2;
+    display: flex;
+    gap: 10px;
+    border-top: 1px solid #ddd;
+}
+
+.input-area input {
+    flex: 1;
+    padding: 11px;
+    border-radius: 50px;
+    border: 1px solid #ccc;
+    outline: none;
+    font-size: 14px;
+
+    /* Evita overflow horizontal */
+    overflow-wrap: break-word;
+}
+
+.input-area button {
+    width: 42px;
+    height: 42px;
+    background: black;
+    color: #FFCD00;
+    border: none;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+
+/* actualizado hola=? */
+
