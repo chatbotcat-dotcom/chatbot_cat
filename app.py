@@ -10,12 +10,26 @@ app = Flask(__name__)
 # ============================================================
 #  CONEXIÓN A POSTGRES (psycopg2, sin async)
 # ============================================================
+import urllib.parse as urlparse
 
 def get_conn():
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
         raise RuntimeError("DATABASE_URL no está configurado.")
-    return psycopg2.connect(db_url, sslmode="require")
+
+    url = urlparse.urlparse(db_url)
+
+    return pg8000.connect(
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port,
+        database=url.path.lstrip('/'),
+        ssl_context=True
+    )
+
+
+
 
 # ============================================================
 #  SESIONES DEL CHAT
