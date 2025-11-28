@@ -1,15 +1,16 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, make_response
 import pg8000
 import re
 import os
+import pdfkit
+from datetime import datetime
+import urllib.parse as urlparse
 
 app = Flask(__name__)
 
 # ============================================================
 #  CONEXIÓN A POSTGRES (pg8000)
 # ============================================================
-import urllib.parse as urlparse
-
 def get_conn():
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
@@ -39,7 +40,10 @@ def obtener_sesion(user_id):
             "serial3": None,
             "enviar_segunda_bienvenida": True,
             "mant_maquina": None,
-            "mant_intervalo": None
+            "mant_intervalo": None,
+            # 🔹 Para el reporte PDF:
+            "reporte_codigos": [],
+            "reporte_eventos": []
         }
     return sesiones[user_id]
 
@@ -84,9 +88,9 @@ def extraer_evento(texto: str):
     return eid, level or "2"
 
 
-
 # ============================================================
-#  🛠 PLAN DE MANTENIMIENTO (estructura vacía lista para rellenar)
+#  🛠 PLAN DE MANTENIMIENTO (ya cargado completo)
+#  (TAL COMO LO TIENES AHORA — NO LO CAMBIO)
 # ============================================================
 
 PLAN_MANTENIMIENTO = {
@@ -913,11 +917,9 @@ PLAN_MANTENIMIENTO = {
     }
 }
 
-
 # ============================================================
 #  HELPERS DE MANTENIMIENTO
 # ============================================================
-
 def obtener_opciones_intervalos(maquina_key):
     """Devuelve los intervalos en orden recomendado."""
     intervalos = PLAN_MANTENIMIENTO[maquina_key]["intervalos"]
@@ -985,11 +987,9 @@ def formatear_mantenimiento(maquina_key, intervalo_key):
     return texto
 
 
-
 # ============================================================
 #  QUERIES
 # ============================================================
-
 def query_codigo(model, serial3, cid, fmi):
     sql = """
         SELECT description, causes, url
@@ -1032,6 +1032,18 @@ def query_evento(model, serial3, eid, level):
     return rows
 
 
+# ============================================================
+#  CONTACTOS PARA EL PDF
+# ============================================================
+CONTACTOS_SOPORTE = [
+    {"zona": "Piura",      "correo": "servicios.piura@empresa.com",      "telefono": "+51 999 111 111"},
+    {"zona": "Trujillo",   "correo": "servicios.trujillo@empresa.com",   "telefono": "+51 999 222 222"},
+    {"zona": "Lambayeque", "correo": "servicios.lambayeque@empresa.com", "telefono": "+51 999 333 333"},
+    {"zona": "Chimbote",   "correo": "servicios.chimbote@empresa.com",   "telefono": "+51 999 444 444"},
+    {"zona": "Huaraz",     "correo": "servicios.huaraz@empresa.com",     "telefono": "+51 999 555 555"},
+    {"zona": "Cajamarca",  "correo": "servicios.cajamarca@empresa.com",  "telefono": "+51 999 666 666"},
+]
+
 
 # ============================================================
 #  RUTA PRINCIPAL
@@ -1040,6 +1052,54 @@ def query_evento(model, serial3, eid, level):
 def home():
     return render_template("index.html")
 
+
+# ============================================================
+#  RUTA PDF — USA LO ÚLTIMO QUE EL USUARIO CONSULTÓ
+# ============================================================
+@app.route("/reporte_pdf")
+def reporte_pdf():
+    user_id = "usuario_unico"
+    ses = obtener_sesion(user_id)
+
+    modelo = ses.get("model") or "N/D"
+    serie = ses.get("serial3") or "N/D"
+    codigos = ses.get("reporte_codigos", [])
+    eventos = ses.get("reporte_eventos", [])
+
+    ahora = datetime.now()
+    fecha = ahora.strftime("%d/%m/%Y")
+    hora = ahora.strftime("%H:%M")
+
+    html = render_template(
+        "reporte_diagnostico.html",
+        modelo=modelo,
+        serie=serie,
+        fecha=fecha,
+        hora=hora,
+        codigos=codigos,
+        eventos=eventos,
+        contactos=CONTACTOS_SOPORTE,
+    )
+
+    # 👉 Si quieres ver primero el HTML, descomenta esta línea:
+    # return html
+
+    options = {
+        "page-size": "A4",
+        "encoding": "UTF-8",
+        "margin-top": "10mm",
+        "margin-bottom": "10mm",
+        "margin-left": "10mm",
+        "margin-right": "10mm",
+    }
+
+    pdf = pdfkit.from_string(html, False, options=options)
+
+    response = make_response(pdf)
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Content-Disposition"] = "attachment; filename=reporte_ferreydoc.pdf"
+
+    return response
 
 
 # ============================================================
@@ -1122,7 +1182,8 @@ def enviar():
             "3️⃣ Mantenimiento preventivo<br>"
             "4️⃣ Diferencia entre código y evento<br>"
             "5️⃣ Cambiar máquina<br>"
-            "6️⃣ Finalizar"
+            "6️⃣ Finalizar<br>"
+            "7️⃣ Generar reporte PDF (última consulta)"
         )
 
     # =======================================================
@@ -1165,20 +1226,31 @@ def enviar():
                 "1️⃣ Códigos de falla<br>"
                 "2️⃣ Eventos<br>"
                 "3️⃣ Mantenimiento preventivo<br>"
-                "6️⃣ Finalizar"
+                "6️⃣ Finalizar<br>"
+                "7️⃣ Generar reporte PDF"
             )
 
         if mensaje == "5":
             ses["estado"] = "pidiendo_modelo"
             ses["model"] = None
             ses["serial3"] = None
+            ses["reporte_codigos"] = []
+            ses["reporte_eventos"] = []
             return responder("Ingresa el <b>nuevo MODELO</b>.")
 
         if mensaje == "6":
             resetear_sesion(user_id)
             return responder("Gracias por usar FerreyDoc 🤝<br>Vuelve cuando quieras.")
 
-        return responder("Elige una opción válida (1–6).")
+        if mensaje == "7":
+            # Enlace directo al PDF
+            return responder(
+                "📄 Generando reporte PDF con los últimos códigos y eventos consultados.<br>"
+                "Haz clic aquí para descargarlo:<br>"
+                "<a href='/reporte_pdf' target='_blank'>📥 Descargar reporte FerreyDoc</a>"
+            )
+
+        return responder("Elige una opción válida (1–7).")
 
     # =======================================================
     # 6) MANTENIMIENTO — ELEGIR MÁQUINA
@@ -1293,6 +1365,9 @@ def enviar():
         codigos = mensaje.split(",")
         respuestas = []
 
+        # 🔹 Reiniciamos el buffer del reporte de códigos
+        ses["reporte_codigos"] = []
+
         for raw in codigos:
             raw = raw.strip()
             if not raw:
@@ -1316,13 +1391,23 @@ def enviar():
 
             desc = fila["description"] or "Sin descripción."
             causas = fila["causes"] or "Sin causas."
-            url = fila["url"] or "Sin URL."
+            url = fila["url"] or ""
+
+            # 🔹 Guardamos para el PDF
+            ses["reporte_codigos"].append({
+                "raw": raw,
+                "cid": cid,
+                "fmi": fmi,
+                "descripcion": desc,
+                "causas": causas,
+                "url": url
+            })
 
             respuestas.append(
                 f"🔧 <b>Código:</b> {raw}<br><br>"
                 f"<b>Descripción:</b><br>{desc}<br><br>"
                 f"<b>Causas:</b><br>{causas}<br><br>"
-                f"<b>Más información:</b><br>{url}<br>"
+                f"<b>Más información:</b><br>{url or 'Sin URL.'}<br>"
             )
 
         ses["estado"] = "menu_principal"
@@ -1332,6 +1417,7 @@ def enviar():
             "1️⃣ Más códigos<br>"
             "2️⃣ Eventos<br>"
             "3️⃣ Mantenimiento preventivo<br>"
+            "7️⃣ Generar reporte PDF<br>"
             "6️⃣ Finalizar"
         )
 
@@ -1345,6 +1431,9 @@ def enviar():
         serial3 = ses["serial3"]
         eventos = mensaje.split(",")
         respuestas = []
+
+        # 🔹 Reiniciamos el buffer del reporte de eventos
+        ses["reporte_eventos"] = []
 
         for raw in eventos:
             raw = raw.strip()
@@ -1364,12 +1453,21 @@ def enviar():
             fila = filas[0]
 
             desc = fila["warning_description"] or "Sin descripción."
-            url = fila["url_main"] or "Sin URL."
+            url = fila["url_main"] or ""
+
+            # 🔹 Guardamos para el PDF
+            ses["reporte_eventos"].append({
+                "raw": raw,
+                "eid": eid,
+                "level": level,
+                "descripcion": desc,
+                "url": url
+            })
 
             respuestas.append(
                 f"📘 <b>Evento:</b> {raw}<br><br>"
                 f"<b>Descripción:</b><br>{desc}<br><br>"
-                f"<b>Más información:</b><br>{url}<br>"
+                f"<b>Más información:</b><br>{url or 'Sin URL.'}<br>"
             )
 
         ses["estado"] = "menu_principal"
@@ -1379,6 +1477,7 @@ def enviar():
             "1️⃣ Códigos<br>"
             "2️⃣ Más eventos<br>"
             "3️⃣ Mantenimiento preventivo<br>"
+            "7️⃣ Generar reporte PDF<br>"
             "6️⃣ Finalizar"
         )
 
@@ -1390,10 +1489,10 @@ def enviar():
     return responder("No entendí 😅<br>Escribe <b>hola</b> para reiniciar.")
 
 
-
 # ============================================================
 # MAIN
 # ============================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
 
