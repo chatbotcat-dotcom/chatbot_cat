@@ -60,34 +60,71 @@
     const typingIndicator = document.getElementById("typing-indicator");
     const inputMensaje = document.getElementById("mensaje");
 
-    // --- AGREGAR MENSAJE BOT ---
+    // --- ESTADOS DE MENSAJE ---
+    function estadoMensajeHTML(estado) {
+        if (estado === "enviado") return `<span class="estado-msg">✓</span>`;
+        if (estado === "entregado") return `<span class="estado-msg">✓✓</span>`;
+        if (estado === "leido") return `<span class="estado-msg estado-leido">✓✓</span>`;
+    }
+
+    // --- HORA ---
+    function horaActual() {
+        return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    // --- MENSAJE DEL BOT ---
     function addBotMessage(text) {
+        const hora = horaActual();
+
         chatBox.innerHTML += `
             <div class="bot-msg">
                 <img src="{{ url_for('static', filename='img/FerreyDoc.webp') }}" class="msg-avatar">
                 <div class="msg-content-left">
                     <div class="bot-text">${text}</div>
+                    <div class="msg-time-left">${hora}</div>
                 </div>
             </div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // --- AGREGAR MENSAJE USUARIO ---
+    // --- MENSAJE DEL USUARIO ---
     function addUserMessage(text) {
+        const hora = horaActual();
+
         chatBox.innerHTML += `
             <div class="user-msg">
                 <div class="msg-content-right">
                     <div class="user-text">${text}</div>
+                    <div class="msg-time-right">
+                        ${hora} ${estadoMensajeHTML("enviado")}
+                    </div>
                 </div>
-                <img src="{{ url_for('static', filename='img/user_default.png') }}" class="msg-avatar">
             </div>`;
+
+        // Cambio automático de estado “entregado” → “leído”
+        setTimeout(() => {
+            let ultimaHora = document.querySelectorAll(".msg-time-right");
+            if (ultimaHora.length) {
+                ultimaHora = ultimaHora[ultimaHora.length - 1];
+                ultimaHora.innerHTML = `${hora} ${estadoMensajeHTML("entregado")}`;
+            }
+        }, 600);
+
+        setTimeout(() => {
+            let ultimaHora = document.querySelectorAll(".msg-time-right");
+            if (ultimaHora.length) {
+                ultimaHora = ultimaHora[ultimaHora.length - 1];
+                ultimaHora.innerHTML = `${hora} ${estadoMensajeHTML("leido")}`;
+            }
+        }, 1200);
+
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     function mostrarTyping() { typingIndicator.classList.remove("hidden"); }
     function ocultarTyping() { typingIndicator.classList.add("hidden"); }
 
-    // --- ENVIAR MENSAJE ---
+    // --- ENVIAR ---
     async function enviarMensaje() {
         const msg = inputMensaje.value.trim();
         if (!msg) return;
@@ -118,4 +155,3 @@
 
 </body>
 </html>
-
