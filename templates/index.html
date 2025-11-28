@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FerreyDoc</title>
 
-    <!-- Tipografía profesional -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tipografía profesional Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -18,38 +18,34 @@
 
         <!-- HEADER -->
         <div class="chat-header">
-            <div class="chat-header-left">
-                <div class="chat-avatar">
-                    <img src="{{ url_for('static', filename='img/FerreyDoc.webp') }}" class="avatar-img">
-                </div>
-
-                <div class="chat-header-texts">
-                    <div class="chat-title">FerreyDoc</div>
-                    <div class="chat-subtitle">En línea • Asistente CAT</div>
+            <div class="header-left">
+                <img src="{{ url_for('static', filename='img/FerreyDoc.png') }}" class="header-avatar">
+                <div>
+                    <div class="header-title">FerreyDoc</div>
+                    <div class="header-subtitle">En línea • Asistente CAT</div>
                 </div>
             </div>
 
-            <div class="chat-header-icons">
+            <div class="header-icons">
                 <span class="icon">🔍</span>
                 <span class="icon">👤</span>
             </div>
         </div>
 
-        <!-- CHAT -->
+        <!-- CHAT BOX -->
         <div id="chat-box" class="chat-box"></div>
 
         <!-- TYPING -->
         <div id="typing-indicator" class="typing hidden">
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span class="typing-text">FerreyDoc está escribiendo...</span>
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         </div>
 
         <!-- INPUT -->
         <div class="input-area">
-            <input type="text" id="mensaje" placeholder="Mensaje..." autocomplete="off">
-            <button onclick="enviarMensaje()">➤</button>
+            <span class="emoji">😊</span>
+            <input type="text" id="mensaje" placeholder="Mensaje…" autocomplete="off">
+            <span class="mic">🎤</span>
+            <button onclick="enviarMensaje()" class="send-btn">➤</button>
         </div>
 
     </div>
@@ -60,63 +56,53 @@
     const typingIndicator = document.getElementById("typing-indicator");
     const inputMensaje = document.getElementById("mensaje");
 
-    // --- ESTADOS DE MENSAJE ---
-    function estadoMensajeHTML(estado) {
-        if (estado === "enviado") return `<span class="estado-msg">✓</span>`;
-        if (estado === "entregado") return `<span class="estado-msg">✓✓</span>`;
-        if (estado === "leido") return `<span class="estado-msg estado-leido">✓✓</span>`;
-    }
-
-    // --- HORA ---
     function horaActual() {
         return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
 
-    // --- MENSAJE DEL BOT ---
+    function estadoMensajeHTML(estado) {
+        if (estado === "enviado") return `<span class="msg-check">✓</span>`;
+        if (estado === "entregado") return `<span class="msg-check">✓✓</span>`;
+        if (estado === "leido") return `<span class="msg-check msg-check-blue">✓✓</span>`;
+    }
+
     function addBotMessage(text) {
         const hora = horaActual();
-
         chatBox.innerHTML += `
             <div class="bot-msg">
-                <img src="{{ url_for('static', filename='img/FerreyDoc.webp') }}" class="msg-avatar">
-                <div class="msg-content-left">
-                    <div class="bot-text">${text}</div>
+                <img src="{{ url_for('static', filename='img/FerreyDoc.png') }}" class="msg-avatar">
+                <div class="msg-block">
+                    <div class="bot-bubble">${text}</div>
                     <div class="msg-time-left">${hora}</div>
                 </div>
             </div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // --- MENSAJE DEL USUARIO ---
     function addUserMessage(text) {
         const hora = horaActual();
 
         chatBox.innerHTML += `
             <div class="user-msg">
-                <div class="msg-content-right">
-                    <div class="user-text">${text}</div>
-                    <div class="msg-time-right">
-                        ${hora} ${estadoMensajeHTML("enviado")}
-                    </div>
+                <div class="msg-block-right">
+                    <div class="user-bubble">${text}</div>
+                    <div class="msg-time-right">${hora} ${estadoMensajeHTML("enviado")}</div>
                 </div>
-            </div>`;
+            </div>
+        `;
 
-        // Cambio automático de estado “entregado” → “leído”
+        // Entregado → Leído
         setTimeout(() => {
-            let ultimaHora = document.querySelectorAll(".msg-time-right");
-            if (ultimaHora.length) {
-                ultimaHora = ultimaHora[ultimaHora.length - 1];
-                ultimaHora.innerHTML = `${hora} ${estadoMensajeHTML("entregado")}`;
-            }
+            let last = document.querySelectorAll(".msg-time-right");
+            last = last[last.length - 1];
+            last.innerHTML = `${hora} ${estadoMensajeHTML("entregado")}`;
         }, 600);
 
         setTimeout(() => {
-            let ultimaHora = document.querySelectorAll(".msg-time-right");
-            if (ultimaHora.length) {
-                ultimaHora = ultimaHora[ultimaHora.length - 1];
-                ultimaHora.innerHTML = `${hora} ${estadoMensajeHTML("leido")}`;
-            }
-        }, 1200);
+            let last = document.querySelectorAll(".msg-time-right");
+            last = last[last.length - 1];
+            last.innerHTML = `${hora} ${estadoMensajeHTML("leido")}`;
+        }, 1300);
 
         chatBox.scrollTop = chatBox.scrollHeight;
     }
@@ -124,7 +110,6 @@
     function mostrarTyping() { typingIndicator.classList.remove("hidden"); }
     function ocultarTyping() { typingIndicator.classList.add("hidden"); }
 
-    // --- ENVIAR ---
     async function enviarMensaje() {
         const msg = inputMensaje.value.trim();
         if (!msg) return;
@@ -144,7 +129,6 @@
         addBotMessage(data.respuesta);
     }
 
-    // --- ENTER PARA ENVIAR ---
     inputMensaje.addEventListener("keydown", function (event) {
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
