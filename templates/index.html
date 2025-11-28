@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FerreyDoc</title>
+
+    <!-- Tipografía profesional -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
 
 <div class="chat-page">
@@ -15,27 +20,35 @@
         <div class="chat-header">
             <div class="chat-header-left">
                 <div class="chat-avatar">
-                    <img src="{{ url_for('static', filename='img/logo_ferreyros.png') }}" class="avatar-img">
+                    <img src="{{ url_for('static', filename='img/FerreyDoc.webp') }}" class="avatar-img">
                 </div>
-                <div>
+
+                <div class="chat-header-texts">
                     <div class="chat-title">FerreyDoc</div>
-                    <div class="chat-subtitle">En línea • Asistente técnico CAT</div>
+                    <div class="chat-subtitle">En línea • Asistente CAT</div>
                 </div>
+            </div>
+
+            <div class="chat-header-icons">
+                <span class="icon">🔍</span>
+                <span class="icon">👤</span>
             </div>
         </div>
 
-        <!-- MENSAJES -->
+        <!-- CHAT -->
         <div id="chat-box" class="chat-box"></div>
 
         <!-- TYPING -->
         <div id="typing-indicator" class="typing hidden">
-            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
             <span class="typing-text">FerreyDoc está escribiendo...</span>
         </div>
 
         <!-- INPUT -->
         <div class="input-area">
-            <input type="text" id="mensaje" placeholder="Escribe un mensaje..." autocomplete="off">
+            <input type="text" id="mensaje" placeholder="Mensaje..." autocomplete="off">
             <button onclick="enviarMensaje()">➤</button>
         </div>
 
@@ -47,20 +60,26 @@
     const typingIndicator = document.getElementById("typing-indicator");
     const inputMensaje = document.getElementById("mensaje");
 
-    // --- BURBUJAS ---
+    // --- AGREGAR MENSAJE BOT ---
     function addBotMessage(text) {
         chatBox.innerHTML += `
             <div class="bot-msg">
-                <div class="bot-name">FerreyDoc</div>
-                <div class="bot-text">${text}</div>
+                <img src="{{ url_for('static', filename='img/FerreyDoc.webp') }}" class="msg-avatar">
+                <div class="msg-content-left">
+                    <div class="bot-text">${text}</div>
+                </div>
             </div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
+    // --- AGREGAR MENSAJE USUARIO ---
     function addUserMessage(text) {
         chatBox.innerHTML += `
             <div class="user-msg">
-                <div class="user-text">${text}</div>
+                <div class="msg-content-right">
+                    <div class="user-text">${text}</div>
+                </div>
+                <img src="{{ url_for('static', filename='img/user_default.png') }}" class="msg-avatar">
             </div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
     }
@@ -97,8 +116,6 @@
     });
 </script>
 
-<!-- actualizado -->
-
-
 </body>
 </html>
+
