@@ -2,187 +2,117 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>FerreyDoc - Informe Técnico de Diagnóstico</title>
+    <title>Reporte de Diagnóstico - FerreyDoc</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='reporte.css') }}">
 </head>
+
 <body>
-<div class="page">
-    <!-- ENCABEZADO -->
+
+    <!-- ENCABEZADO SUPERIOR -->
     <header class="header">
-        <div class="header-left">
-            <div class="logo-placeholder">
-                <!-- Aquí puedes poner <img src="..." alt="Ferreyros"> -->
-                <span>FERREYDOC</span>
-            </div>
-            <div class="title-block">
-                <h1>Informe Técnico de Diagnóstico</h1>
-                <p class="subtitle">Asistente técnico FerreyDoc</p>
+        <div class="logo-block">
+            <img src="{{ url_for('static', filename='robot_ferreydoc.png') }}" class="robot-logo">
+            <div class="title-text">
+                <h1>Reporte de Diagnóstico</h1>
+                <h2>FerreyDoc — Asistente Técnico Inteligente</h2>
             </div>
         </div>
-        <div class="header-right">
-            <table class="info-table">
-                <tr>
-                    <th>Fecha</th>
-                    <td>{{ fecha }}</td>
-                </tr>
-                <tr>
-                    <th>Hora</th>
-                    <td>{{ hora }}</td>
-                </tr>
-                <tr>
-                    <th>Modelo</th>
-                    <td>{{ modelo }}</td>
-                </tr>
-                <tr>
-                    <th>Serie</th>
-                    <td>{{ serie }}</td>
-                </tr>
-            </table>
+
+        <div class="info-box">
+            <p><strong>Modelo:</strong> {{ modelo }}</p>
+            <p><strong>Serie:</strong> {{ serie }}</p>
+            <p><strong>Fecha del reporte:</strong> {{ now }}</p>
         </div>
     </header>
 
     <hr class="divider">
 
-    <!-- 1. RESUMEN -->
-    <section class="section">
-        <h2>1. Resumen del diagnóstico</h2>
-        <div class="summary-grid">
-            <div class="summary-card">
-                <div class="summary-label">Códigos analizados</div>
-                <div class="summary-value">{{ codigos|length }}</div>
-            </div>
-            <div class="summary-card">
-                <div class="summary-label">Eventos analizados</div>
-                <div class="summary-value">{{ eventos|length }}</div>
-            </div>
+    <!-- ----------------------- -->
+    <!--  RESUMEN GENERAL -->
+    <!-- ----------------------- -->
+    <section>
+        <h2 class="section-title">Resumen General</h2>
+        <p class="content-text">
+            Este documento contiene el análisis solicitado por el usuario con base en la base de datos técnica
+            de Ferreyros/Caterpillar. Incluye la interpretación de <strong>códigos de falla (CID/FMI)</strong>
+            y <strong>eventos (EID/Level)</strong> correspondientes al modelo y prefijo de serie especificado.
+        </p>
+    </section>
+
+    <!-- ----------------------- -->
+    <!-- CÓDIGOS DE FALLA -->
+    <!-- ----------------------- -->
+    {% if codigos and codigos|length > 0 %}
+    <section>
+        <h2 class="section-title">Códigos de Falla (CID / FMI)</h2>
+
+        {% for c in codigos %}
+        <div class="item-block">
+            <p><strong>Código ingresado:</strong> {{ c.raw }}</p>
+            <p><strong>CID:</strong> {{ c.cid }} — <strong>FMI:</strong> {{ c.fmi }}</p>
+            <p><strong>Descripción:</strong><br>{{ c.descripcion }}</p>
+            <p><strong>Causas:</strong><br>{{ c.causas }}</p>
+
+            {% if c.url %}
+            <p><strong>Más información:</strong> <a href="{{ c.url }}">{{ c.url }}</a></p>
+            {% endif %}
         </div>
-        <p class="note">
-            Nota: Este informe resume la información técnica disponible para los códigos de falla (CID/FMI)
-            y eventos (EID/Level) consultados. La interpretación de severidad y la definición de acciones
-            específicas de mantenimiento deben ser realizadas por el área de Ingeniería de Servicios.
-        </p>
+        {% endfor %}
     </section>
+    {% endif %}
 
-    <!-- 2. CÓDIGOS DE FALLA -->
-    <section class="section">
-        <h2>2. Códigos de falla (CID/FMI)</h2>
-        {% if codigos %}
-            {% for c in codigos %}
-            <div class="card">
-                <div class="card-header">
-                    <div>
-                        <span class="chip chip-yellow">Código</span>
-                        <span class="code-main">{{ c.raw }}</span>
-                    </div>
-                    <div class="code-tags">
-                        {% if c.cid %}<span class="tag">CID: {{ c.cid }}</span>{% endif %}
-                        {% if c.fmi %}<span class="tag">FMI: {{ c.fmi }}</span>{% endif %}
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="field">
-                        <div class="field-label">Descripción técnica</div>
-                        <div class="field-value">{{ c.descripcion or 'Sin descripción registrada.' }}</div>
-                    </div>
-                    <div class="field">
-                        <div class="field-label">Causas posibles</div>
-                        <div class="field-value">{{ c.causas or 'Sin causas registradas.' }}</div>
-                    </div>
-                    {% if c.url %}
-                    <div class="field">
-                        <div class="field-label">Referencia técnica (SIS)</div>
-                        <div class="field-value">
-                            <a href="{{ c.url }}" target="_blank">{{ c.url }}</a>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+    <!-- ----------------------- -->
+    <!-- EVENTOS -->
+    <!-- ----------------------- -->
+    {% if eventos and eventos|length > 0 %}
+    <section>
+        <h2 class="section-title">Eventos (EID / Level)</h2>
+
+        {% for e in eventos %}
+        <div class="item-block">
+            <p><strong>Evento ingresado:</strong> {{ e.raw }}</p>
+            <p><strong>EID:</strong> {{ e.eid }} — <strong>Nivel:</strong> {{ e.level }}</p>
+            <p><strong>Descripción:</strong><br>{{ e.descripcion }}</p>
+
+            {% if e.url %}
+            <p><strong>Más información:</strong> <a href="{{ e.url }}">{{ e.url }}</a></p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <!-- ----------------------- -->
+    <!-- CONTACTOS -->
+    <!-- ----------------------- -->
+    <section>
+        <h2 class="section-title">Contactos de Soporte Técnico</h2>
+
+        <table class="table-contactos">
+            <tr>
+                <th>Zona</th>
+                <th>Correo</th>
+                <th>Teléfono</th>
+            </tr>
+
+            {% for c in contactos %}
+            <tr>
+                <td>{{ c.zona }}</td>
+                <td>{{ c.correo }}</td>
+                <td>{{ c.telefono }}</td>
+            </tr>
             {% endfor %}
-        {% else %}
-            <p class="empty-msg">No se registraron códigos de falla en esta consulta.</p>
-        {% endif %}
-    </section>
-
-    <!-- 3. EVENTOS -->
-    <section class="section">
-        <h2>3. Eventos (EID/Level)</h2>
-        {% if eventos %}
-            {% for e in eventos %}
-            <div class="card">
-                <div class="card-header">
-                    <div>
-                        <span class="chip chip-blue">Evento</span>
-                        <span class="code-main">{{ e.raw }}</span>
-                    </div>
-                    <div class="code-tags">
-                        {% if e.eid %}<span class="tag">EID: {{ e.eid }}</span>{% endif %}
-                        {% if e.level %}<span class="tag">Level: {{ e.level }}</span>{% endif %}
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="field">
-                        <div class="field-label">Descripción</div>
-                        <div class="field-value">{{ e.descripcion or 'Sin descripción registrada.' }}</div>
-                    </div>
-                    {% if e.url %}
-                    <div class="field">
-                        <div class="field-label">Referencia técnica (SIS)</div>
-                        <div class="field-value">
-                            <a href="{{ e.url }}" target="_blank">{{ e.url }}</a>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <p class="empty-msg">No se registraron eventos en esta consulta.</p>
-        {% endif %}
-    </section>
-
-    <!-- 4. RECOMENDACIONES GENERALES -->
-    <section class="section">
-        <h2>4. Recomendaciones generales</h2>
-        <ul class="recommendations">
-            <li>Revisar físicamente los componentes asociados a los códigos de falla y eventos listados.</li>
-            <li>Contrastar la información con los manuales de operación y mantenimiento del equipo.</li>
-            <li>Registrar en el historial del equipo las incidencias encontradas y acciones realizadas.</li>
-            <li>Escalar a Ingeniería de Servicios cuando se repitan códigos o eventos en cortos intervalos de tiempo.</li>
-        </ul>
-        <p class="note">
-            Este informe no reemplaza la evaluación de un técnico o ingeniero de campo. 
-            Siempre valide la información con los lineamientos internos de Ferreyros y Cat.
-        </p>
-    </section>
-
-    <!-- 5. CONTACTOS -->
-    <section class="section">
-        <h2>5. Contactos de soporte técnico</h2>
-        <p>En caso requiera coordinar una inspección o soporte adicional, puede contactar a Ingeniería de Servicios según la zona:</p>
-        <table class="contacts-table">
-            <thead>
-                <tr>
-                    <th>Zona</th>
-                    <th>Correo</th>
-                    <th>Teléfono</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for c in contactos %}
-                <tr>
-                    <td>{{ c.zona }}</td>
-                    <td>{{ c.correo }}</td>
-                    <td>{{ c.telefono }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
         </table>
     </section>
 
+    <!-- ----------------------- -->
+    <!-- PIE DE PÁGINA -->
+    <!-- ----------------------- -->
     <footer class="footer">
-        Informe generado automáticamente por FerreyDoc — Asistente técnico para equipos CAT.
+        <p>FerreyDoc — Sistema de Diagnóstico Inteligente</p>
+        <p>Generado automáticamente por el asistente.</p>
     </footer>
-</div>
+
 </body>
 </html>
+
