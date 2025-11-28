@@ -1,117 +1,185 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Reporte de Diagnóstico - FerreyDoc</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='reporte.css') }}">
-</head>
+<meta charset="utf-8" />
+<title>Reporte FerreyDoc</title>
 
+<style>
+    body {
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 12px;
+        color: #000000;
+        margin: 20px;
+    }
+
+    h1, h2, h3 {
+        color: #000000;
+        margin-bottom: 6px;
+    }
+
+    h1 {
+        font-size: 20px;
+        background-color: #FFCC00;
+        padding: 6px;
+        border-radius: 4px;
+    }
+
+    h2 {
+        font-size: 16px;
+        margin-top: 18px;
+        padding-bottom: 3px;
+        border-bottom: 1px solid #FFCC00;
+    }
+
+    .section {
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+    table, th, td {
+        border: 1px solid #000000;
+    }
+
+    th {
+        background-color: #FFCC00;
+        padding: 6px;
+        font-size: 12px;
+        text-align: left;
+    }
+
+    td {
+        padding: 6px;
+        vertical-align: top;
+    }
+
+    .small {
+        font-size: 10px;
+    }
+
+    .footer {
+        margin-top: 35px;
+        font-size: 10px;
+        text-align: center;
+        color: #555555;
+    }
+
+    .contacto-block {
+        margin-bottom: 6px;
+    }
+
+    .bold {
+        font-weight: bold;
+    }
+</style>
+
+</head>
 <body>
 
-    <!-- ENCABEZADO SUPERIOR -->
-    <header class="header">
-        <div class="logo-block">
-            <img src="{{ url_for('static', filename='robot_ferreydoc.png') }}" class="robot-logo">
-            <div class="title-text">
-                <h1>Reporte de Diagnóstico</h1>
-                <h2>FerreyDoc — Asistente Técnico Inteligente</h2>
-            </div>
-        </div>
+<!-- ====================================================== -->
+<!-- Encabezado -->
+<!-- ====================================================== -->
 
-        <div class="info-box">
-            <p><strong>Modelo:</strong> {{ modelo }}</p>
-            <p><strong>Serie:</strong> {{ serie }}</p>
-            <p><strong>Fecha del reporte:</strong> {{ now }}</p>
-        </div>
-    </header>
+<h1>Reporte de Diagnóstico — FerreyDoc</h1>
 
-    <hr class="divider">
+<div class="section">
+    <p><span class="bold">Modelo:</span> {{ modelo }}</p>
+    <p><span class="bold">Serie (3 dígitos):</span> {{ serie }}</p>
+    <p><span class="bold">Fecha de generación:</span> {{ now }}</p>
+</div>
 
-    <!-- ----------------------- -->
-    <!--  RESUMEN GENERAL -->
-    <!-- ----------------------- -->
-    <section>
-        <h2 class="section-title">Resumen General</h2>
-        <p class="content-text">
-            Este documento contiene el análisis solicitado por el usuario con base en la base de datos técnica
-            de Ferreyros/Caterpillar. Incluye la interpretación de <strong>códigos de falla (CID/FMI)</strong>
-            y <strong>eventos (EID/Level)</strong> correspondientes al modelo y prefijo de serie especificado.
-        </p>
-    </section>
+<!-- ====================================================== -->
+<!-- CÓDIGOS -->
+<!-- ====================================================== -->
 
-    <!-- ----------------------- -->
-    <!-- CÓDIGOS DE FALLA -->
-    <!-- ----------------------- -->
-    {% if codigos and codigos|length > 0 %}
-    <section>
-        <h2 class="section-title">Códigos de Falla (CID / FMI)</h2>
+<h2>Códigos de Falla (CID / FMI)</h2>
 
-        {% for c in codigos %}
-        <div class="item-block">
-            <p><strong>Código ingresado:</strong> {{ c.raw }}</p>
-            <p><strong>CID:</strong> {{ c.cid }} — <strong>FMI:</strong> {{ c.fmi }}</p>
-            <p><strong>Descripción:</strong><br>{{ c.descripcion }}</p>
-            <p><strong>Causas:</strong><br>{{ c.causas }}</p>
+{% if codigos and codigos|length > 0 %}
+<table>
+    <tr>
+        <th> Código </th>
+        <th> Descripción </th>
+        <th> Causas </th>
+        <th> URL </th>
+    </tr>
 
+    {% for c in codigos %}
+    <tr>
+        <td>{{ c.raw }}</td>
+        <td>{{ c.descripcion }}</td>
+        <td>{{ c.causas }}</td>
+        <td class="small">
             {% if c.url %}
-            <p><strong>Más información:</strong> <a href="{{ c.url }}">{{ c.url }}</a></p>
+                {{ c.url }}
+            {% else %}
+                —
             {% endif %}
-        </div>
-        {% endfor %}
-    </section>
-    {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No se registraron códigos.</p>
+{% endif %}
 
-    <!-- ----------------------- -->
-    <!-- EVENTOS -->
-    <!-- ----------------------- -->
-    {% if eventos and eventos|length > 0 %}
-    <section>
-        <h2 class="section-title">Eventos (EID / Level)</h2>
+<!-- ====================================================== -->
+<!-- EVENTOS -->
+<!-- ====================================================== -->
 
-        {% for e in eventos %}
-        <div class="item-block">
-            <p><strong>Evento ingresado:</strong> {{ e.raw }}</p>
-            <p><strong>EID:</strong> {{ e.eid }} — <strong>Nivel:</strong> {{ e.level }}</p>
-            <p><strong>Descripción:</strong><br>{{ e.descripcion }}</p>
+<h2>Eventos (EID / Level)</h2>
 
+{% if eventos and eventos|length > 0 %}
+<table>
+    <tr>
+        <th> Evento </th>
+        <th> Descripción </th>
+        <th> URL </th>
+    </tr>
+
+    {% for e in eventos %}
+    <tr>
+        <td>{{ e.raw }}</td>
+        <td>{{ e.descripcion }}</td>
+        <td class="small">
             {% if e.url %}
-            <p><strong>Más información:</strong> <a href="{{ e.url }}">{{ e.url }}</a></p>
+                {{ e.url }}
+            {% else %}
+                —
             {% endif %}
-        </div>
-        {% endfor %}
-    </section>
-    {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No se registraron eventos.</p>
+{% endif %}
 
-    <!-- ----------------------- -->
-    <!-- CONTACTOS -->
-    <!-- ----------------------- -->
-    <section>
-        <h2 class="section-title">Contactos de Soporte Técnico</h2>
+<!-- ====================================================== -->
+<!-- CONTACTOS -->
+<!-- ====================================================== -->
 
-        <table class="table-contactos">
-            <tr>
-                <th>Zona</th>
-                <th>Correo</th>
-                <th>Teléfono</th>
-            </tr>
+<h2>Contactos de Soporte</h2>
 
-            {% for c in contactos %}
-            <tr>
-                <td>{{ c.zona }}</td>
-                <td>{{ c.correo }}</td>
-                <td>{{ c.telefono }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-    </section>
+{% for c in contactos %}
+<div class="contacto-block">
+    <span class="bold">{{ c.zona }}:</span>
+    {{ c.correo }} — {{ c.telefono }}
+</div>
+{% endfor %}
 
-    <!-- ----------------------- -->
-    <!-- PIE DE PÁGINA -->
-    <!-- ----------------------- -->
-    <footer class="footer">
-        <p>FerreyDoc — Sistema de Diagnóstico Inteligente</p>
-        <p>Generado automáticamente por el asistente.</p>
-    </footer>
+<!-- ====================================================== -->
+<!-- PIE -->
+<!-- ====================================================== -->
+
+<div class="footer">
+    Reporte generado automáticamente con FerreyDoc — Asistente Técnico CAT<br />
+    © {{ now[:4] }} Ferreyros (No oficial)
+</div>
 
 </body>
 </html>
