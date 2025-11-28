@@ -7,6 +7,8 @@ import base64
 from datetime import datetime
 import urllib.parse as urlparse
 
+PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
+
 app = Flask(__name__)
 
 # ============================================================
@@ -964,8 +966,11 @@ CONTACTOS_SOPORTE = [
 # ============================================================
 #  PDFKIT
 # ============================================================
+PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf="/usr/bin/wkhtmltopdf")
+
 def generar_pdf(html_string):
-    return pdfkit.from_string(html_string, False)
+    return pdfkit.from_string(html_string, False, configuration=PDFKIT_CONFIG)
+
 
 # ============================================================
 #  RUTA PRINCIPAL
