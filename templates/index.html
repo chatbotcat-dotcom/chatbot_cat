@@ -126,6 +126,34 @@
 
         const data = await resp.json();
         ocultarTyping();
+
+        // ---------------------------------------------------------
+        // --- PDF AUTO-DESCARGA (integración oficial) -------------
+        // ---------------------------------------------------------
+        if (data.pdf_base64) {
+
+            const pdfBase64 = data.pdf_base64;
+            const filename = data.filename || "Reporte_FerreyDoc.pdf";
+
+            const pdfBytes = atob(pdfBase64);
+            const bytes = new Uint8Array(pdfBytes.length);
+
+            for (let i = 0; i < pdfBytes.length; i++) {
+                bytes[i] = pdfBytes.charCodeAt(i);
+            }
+
+            const blob = new Blob([bytes], { type: "application/pdf" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            console.log("📄 PDF descargado automáticamente ✔");
+        }
+        // ---------------------------------------------------------
+
         addBotMessage(data.respuesta);
     }
 
