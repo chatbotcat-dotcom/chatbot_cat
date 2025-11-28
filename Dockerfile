@@ -1,41 +1,40 @@
-# ------------------------------
-# Imagen base de Python
-# ------------------------------
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# ------------------------------
-# Instalar wkhtmltopdf + dependencias necesarias
-# ------------------------------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wkhtmltopdf \
-    libxrender1 \
-    libfontconfig1 \
-    libxext6 \
-    libfreetype6 \
-    libjpeg62-turbo \
-    libpng16-16 \
-    libssl3 \
-    fontconfig \
-    xfonts-75dpi \
-    xfonts-base \
-    && rm -rf /var/lib/apt/lists/*
+# Instalar dependencias de wkhtmltopdf
+RUN apt-get update && \
+    apt-get install -y \
+        wkhtmltopdf \
+        xvfb \
+        xfonts-base \
+        xfonts-75dpi \
+        libxrender1 \
+        libxext6 \
+        libfontconfig1 \
+        libjpeg62-turbo \
+        libpng16-16 \
+        libssl3 \
+        libx11-6 \
+        libxcb1 \
+        libxrandr2 \
+        libxinerama1 \
+        libfreetype6 \
+        libstdc++6 \
+        libgcc-s1 \
+        && apt-get clean
 
-# ------------------------------
-# Crear directorio de trabajo
-# ------------------------------
+# Directorio
 WORKDIR /app
-
-# ------------------------------
-# Copiar proyecto a contenedor
-# ------------------------------
 COPY . .
 
-# ------------------------------
 # Instalar dependencias Python
-# ------------------------------
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ------------------------------
-# Comando final para Render
-# ------------------------------
-CMD ["gunicorn", "--bind=0.0.0.0:10000", "app:app"]
+# Variables necesarias
+ENV XDG_RUNTIME_DIR=/tmp/runtime
+RUN mkdir -p /tmp/runtime && chmod 777 /tmp/runtime
+
+# Exponer puerto
+EXPOSE 5000
+
+CMD ["python", "app.py"]
+
