@@ -2,7 +2,8 @@ from flask import Flask, render_template, request, jsonify, Response
 import pg8000
 import re
 import os
-from weasyprint import HTML
+import pdfkit
+import base64
 from datetime import datetime
 import urllib.parse as urlparse
 
@@ -86,10 +87,8 @@ def extraer_evento(texto: str):
     return eid, level or "2"
 
 # ============================================================
-#  🛠 PLAN DE MANTENIMIENTO
+#  PLAN DE MANTENIMIENTO
 # ============================================================
-# 🔥🔥🔥 AQUÍ PEGA COMPLETO TU DICCIONARIO 🔥🔥🔥
-
 PLAN_MANTENIMIENTO = {
     # =======================================================
     # RODILLO
@@ -913,15 +912,6 @@ PLAN_MANTENIMIENTO = {
         }
     }
 }
-
-
-
-
-
-
-
-
-
 # ============================================================
 #  QUERIES A BASE DE DATOS
 # ============================================================
@@ -960,22 +950,22 @@ def query_evento(model, serial3, eid, level):
     return rows
 
 # ============================================================
-# CONTACTOS (se muestran en el PDF)
+# CONTACTOS PARA PDF
 # ============================================================
 CONTACTOS_SOPORTE = [
-    {"zona": "Piura",      "correo": "servicios.piura@empresa.com",      "telefono": "+51 999 111 111"},
-    {"zona": "Trujillo",   "correo": "servicios.trujillo@empresa.com",   "telefono": "+51 999 222 222"},
+    {"zona": "Piura", "correo": "servicios.piura@empresa.com", "telefono": "+51 999 111 111"},
+    {"zona": "Trujillo", "correo": "servicios.trujillo@empresa.com", "telefono": "+51 999 222 222"},
     {"zona": "Lambayeque", "correo": "servicios.lambayeque@empresa.com", "telefono": "+51 999 333 333"},
-    {"zona": "Chimbote",   "correo": "servicios.chimbote@empresa.com",   "telefono": "+51 999 444 444"},
-    {"zona": "Huaraz",     "correo": "servicios.huaraz@empresa.com",     "telefono": "+51 999 555 555"},
-    {"zona": "Cajamarca",  "correo": "servicios.cajamarca@empresa.com",  "telefono": "+51 999 666 666"},
+    {"zona": "Chimbote", "correo": "servicios.chimbote@empresa.com", "telefono": "+51 999 444 444"},
+    {"zona": "Huaraz", "correo": "servicios.huaraz@empresa.com", "telefono": "+51 999 555 555"},
+    {"zona": "Cajamarca", "correo": "servicios.cajamarca@empresa.com", "telefono": "+51 999 666 666"},
 ]
 
 # ============================================================
-#  GENERACIÓN DE PDF — WeasyPrint
+#  PDFKIT
 # ============================================================
 def generar_pdf(html_string):
-    return HTML(string=html_string).write_pdf()
+    return pdfkit.from_string(html_string, False)
 
 # ============================================================
 #  RUTA PRINCIPAL
@@ -985,11 +975,12 @@ def home():
     return render_template("index.html")
 
 # ============================================================
-#  RUTA PARA PDF DIRECTO (si lo necesitas)
+#  RUTA PDF DIRECTO
 # ============================================================
 @app.route("/generar_reporte", methods=["POST"])
 def generar_reporte():
     data = request.get_json()
+
     html = render_template(
         "reporte_diagnostico.html",
         modelo=data.get("modelo"),
@@ -1012,6 +1003,7 @@ def generar_reporte():
 # ============================================================
 @app.route("/enviar", methods=["POST"])
 def enviar():
+
     data = request.get_json()
     mensaje = data.get("mensaje", "").strip()
     user_id = "usuario_unico"
@@ -1019,32 +1011,25 @@ def enviar():
     ses = obtener_sesion(user_id)
     estado = ses["estado"]
 
+    # ↘️ contenedor que evita que el chat se expanda
     def responder(texto, extra=None):
-        payload = {"respuesta": texto.replace("\n", "<br>")}
+        texto = f"<div style='max-width:100%; word-wrap:break-word;'>{texto}</div>"
+        payload = {"respuesta": texto}
         if extra:
             payload.update(extra)
         return jsonify(payload)
 
-    # =======================================================
-    # 1) BIENVENIDA
-    # =======================================================
+    # ==================== BIENVENIDA ====================
     if estado == "inicio":
         ses["estado"] = "esperando_consentimiento"
         return responder(
             "👋 Hola, soy <b>FerreyDoc</b>, tu asistente técnico CAT.<br><br>"
-            "Puedo ayudarte con:<br>"
-            "• Códigos CID/FMI<br>"
-            "• Eventos EID/Level<br>"
-            "• Mantenimiento preventivo<br><br>"
             "¿Aceptas compartir modelo y serie del equipo?<br>"
             "1️⃣ Sí<br>2️⃣ No"
         )
 
-    # =======================================================
-    # 2) CONSENTIMIENTO
-    # =======================================================
+    # ==================== CONSENTIMIENTO ====================
     if estado == "esperando_consentimiento":
-
         if mensaje == "1":
             ses["estado"] = "pidiendo_modelo"
             return responder("Perfecto 🙌<br>Ingresa el <b>MODELO</b> (ej: 950H, 320D).")
@@ -1055,61 +1040,56 @@ def enviar():
 
         return responder("Debes responder 1 o 2.")
 
-    # =======================================================
-    # 3) MODELO
-    # =======================================================
+    # ==================== MODELO ====================
     if estado == "pidiendo_modelo":
         ses["model"] = mensaje.upper()
         ses["estado"] = "pidiendo_serie"
         return responder(
-            f"Modelo registrado: <b>{ses['model']}</b><br>Ahora ingresa los <b>primeros 3 dígitos</b> de la serie."
+            f"Modelo registrado: <b>{ses['model']}</b><br>"
+            "Ahora ingresa los <b>primeros 3 dígitos</b> de la serie."
         )
 
-    # =======================================================
-    # 4) SERIE
-    # =======================================================
+    # ==================== SERIE ====================
     if estado == "pidiendo_serie":
         ses["serial3"] = mensaje[:3].upper()
         ses["estado"] = "menu_principal"
         return responder(
             f"✔ Modelo: <b>{ses['model']}</b><br>"
             f"✔ Serie: <b>{ses['serial3']}</b><br><br>"
-            "¿Qué deseas hacer?<br><br>"
-            "1️⃣ Códigos de falla<br>"
+            "¿Qué deseas hacer?<br>"
+            "1️⃣ Códigos<br>"
             "2️⃣ Eventos<br>"
-            "3️⃣ Mantenimiento preventivo<br>"
-            "4️⃣ Diferencia entre código y evento<br>"
+            "3️⃣ Mantenimiento<br>"
+            "4️⃣ Dif. código vs evento<br>"
             "5️⃣ Cambiar máquina<br>"
             "6️⃣ Finalizar<br>"
-            "7️⃣ Generar reporte PDF"
+            "7️⃣ Generar PDF"
         )
 
-    # =======================================================
-    # 5) MENU PRINCIPAL
-    # =======================================================
+    # ==================== MENU PRINCIPAL ====================
     if estado == "menu_principal":
 
-        # 1️⃣ CÓDIGOS
+        # 1️⃣ Códigos
         if mensaje == "1":
             ses["estado"] = "pidiendo_codigos"
             return responder(
-                "🔧 Ingresa los códigos CID/FMI (puedes enviar varios separados por coma):<br>"
+                "Ingresa códigos CID/FMI separados por coma.<br>"
                 "Ej: 168-04, 028 168 04"
             )
 
-        # 2️⃣ EVENTOS
+        # 2️⃣ Eventos
         if mensaje == "2":
             ses["estado"] = "pidiendo_eventos"
             return responder(
-                "📘 Ingresa eventos EID/Level (puedes enviar varios separados por coma):<br>"
+                "Ingresa eventos EID/Level separados por coma.<br>"
                 "Ej: E0117, 0117 (2)"
             )
 
-        # 3️⃣ MANTENIMIENTO
+        # 3️⃣ Mantenimiento
         if mensaje == "3":
             ses["estado"] = "mant_elegir_maquina"
             return responder(
-                "🛠️ Selecciona el tipo de maquinaria:<br>"
+                "Selecciona el tipo de maquinaria:<br>"
                 "1️⃣ Rodillo<br>"
                 "2️⃣ Cargador<br>"
                 "3️⃣ Excavadora<br>"
@@ -1117,60 +1097,50 @@ def enviar():
                 "9️⃣ Volver"
             )
 
-        # 4️⃣ DIF. CÓDIGO VS EVENTO
+        # 4️⃣ Explicación
         if mensaje == "4":
             return responder(
-                "<b>Código (CID/FMI):</b> Problema en sensor/actuador.<br>"
-                "<b>Evento (EID/Level):</b> Condición registrada del sistema."
+                "<b>Código (CID/FMI):</b> Problema mecánico/eléctrico puntual.<br>"
+                "<b>Evento (EID/Level):</b> Registro histórico de condición."
             )
 
-        # 5️⃣ CAMBIAR MAQUINA
+        # 5️⃣ Cambiar máquina
         if mensaje == "5":
-            ses["model"] = None
-            ses["serial3"] = None
-            ses["reporte_codigos"] = []
-            ses["reporte_eventos"] = []
-            ses["estado"] = "pidiendo_modelo"
+            resetear_sesion(user_id)
             return responder("Ingresa el nuevo <b>MODELO</b>.")
 
-        # 6️⃣ FINALIZAR
+        # 6️⃣ Finalizar
         if mensaje == "6":
             resetear_sesion(user_id)
             return responder("Gracias por usar FerreyDoc 🤝")
 
-        # 7️⃣ GENERAR PDF
+        # 7️⃣ Generar PDF
         if mensaje == "7":
-            modelo = ses.get("model") or "N/D"
-            serie = ses.get("serial3") or "N/D"
-            codigos = ses.get("reporte_codigos", [])
-            eventos = ses.get("reporte_eventos", [])
 
             html = render_template(
                 "reporte_diagnostico.html",
-                modelo=modelo,
-                serie=serie,
-                codigos=codigos,
-                eventos=eventos,
+                modelo=ses.get("model") or "N/D",
+                serie=ses.get("serial3") or "N/D",
+                codigos=ses.get("reporte_codigos", []),
+                eventos=ses.get("reporte_eventos", []),
                 contactos=CONTACTOS_SOPORTE
             )
 
             pdf_bytes = generar_pdf(html)
-            import base64
             pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
+            # limpiar historial
             ses["reporte_codigos"] = []
             ses["reporte_eventos"] = []
 
             return responder(
-                "📄 Tu reporte PDF está listo.",
+                "📄 Tu reporte PDF está listo para descargar.",
                 {"pdf_base64": pdf_b64, "filename": "FerreyDoc_Reporte.pdf"}
             )
 
         return responder("Elige una opción válida (1–7).")
 
-    # =======================================================
-    # 6) CÓDIGOS
-    # =======================================================
+    # ==================== CÓDIGOS ====================
     if estado == "pidiendo_codigos":
 
         model = ses["model"]
@@ -1181,11 +1151,10 @@ def enviar():
         ses["reporte_codigos"] = []
 
         for raw in codigos_raw:
-            raw = raw.strip()
-            if not raw:
-                continue
 
+            raw = raw.strip()
             mid, cid, fmi = extraer_codigo(raw)
+
             if not cid or not fmi:
                 respuestas.append(f"❌ No pude interpretar {raw}")
                 continue
@@ -1200,6 +1169,9 @@ def enviar():
             causas = fila["causes"] or "Sin causas."
             url = fila["url"] or ""
 
+            # clickable link
+            url_html = f'<a href="{url}" target="_blank">{url}</a>' if url else "—"
+
             ses["reporte_codigos"].append({
                 "raw": raw,
                 "cid": cid,
@@ -1213,7 +1185,7 @@ def enviar():
                 f"🔧 <b>Código:</b> {raw}<br><br>"
                 f"<b>Descripción:</b> {desc}<br><br>"
                 f"<b>Causas:</b> {causas}<br><br>"
-                f"<b>Más información:</b> {url}"
+                f"<b>Más información:</b> {url_html}"
             )
 
         ses["estado"] = "menu_principal"
@@ -1228,9 +1200,7 @@ def enviar():
             "6️⃣ Finalizar"
         )
 
-    # =======================================================
-    # 7) EVENTOS
-    # =======================================================
+    # ==================== EVENTOS ====================
     if estado == "pidiendo_eventos":
 
         model = ses["model"]
@@ -1242,19 +1212,18 @@ def enviar():
 
         for raw in eventos_raw:
             raw = raw.strip()
-            if not raw:
-                continue
 
             eid, level = extraer_evento(raw)
             filas = query_evento(model, serial3, eid, level)
 
             if not filas:
-                respuestas.append(f"❌ No encontré información para {raw}")
+                respuestas.append(f"❌ No encontré datos para {raw}")
                 continue
 
             fila = filas[0]
             desc = fila["warning_description"] or "Sin descripción."
             url = fila["url_main"] or ""
+            url_html = f'<a href="{url}" target="_blank">{url}</a>' if url else "—"
 
             ses["reporte_eventos"].append({
                 "raw": raw,
@@ -1267,7 +1236,7 @@ def enviar():
             respuestas.append(
                 f"📘 <b>Evento:</b> {raw}<br><br>"
                 f"<b>Descripción:</b> {desc}<br><br>"
-                f"<b>Más información:</b> {url}"
+                f"<b>Más información:</b> {url_html}"
             )
 
         ses["estado"] = "menu_principal"
@@ -1282,9 +1251,7 @@ def enviar():
             "6️⃣ Finalizar"
         )
 
-    # =======================================================
-    # FALLBACK
-    # =======================================================
+    # ==================== FALLBACK ====================
     return responder("No entendí 😅<br>Escribe <b>hola</b> para reiniciar.")
 
 
@@ -1293,6 +1260,4 @@ def enviar():
 # ============================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
-
 
