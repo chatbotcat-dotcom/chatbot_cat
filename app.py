@@ -1135,6 +1135,60 @@ def enviar():
 
         return responder("Elige una opción válida (1–7).")
 
+# ==================== MANTENIMIENTO — ELEGIR MÁQUINA ====================
+if estado == "mant_elegir_maquina":
+
+    if mensaje == "1":
+        ses["mant_maquina"] = "rodillo"
+    elif mensaje == "2":
+        ses["mant_maquina"] = "cargador"
+    elif mensaje == "3":
+        ses["mant_maquina"] = "excavadora"
+    elif mensaje == "4":
+        ses["mant_maquina"] = "tractor"
+    elif mensaje == "9":
+        ses["estado"] = "menu_principal"
+        return responder(
+            "¿Qué deseas hacer?<br>"
+            "1️⃣ Códigos<br>"
+            "2️⃣ Eventos<br>"
+            "3️⃣ Mantenimiento<br>"
+            "4️⃣ Dif. código vs evento<br>"
+            "5️⃣ Cambiar máquina<br>"
+            "6️⃣ Finalizar<br>"
+            "7️⃣ Generar PDF"
+        )
+    else:
+        return responder("Selecciona una opción válida (1–4 o 9).")
+
+    # Si se eligió máquina válida → pasar a intervalos
+    ses["estado"] = "mant_elegir_intervalo"
+    maquina = ses["mant_maquina"]
+    info = PLAN_MANTENIMIENTO.get(maquina)
+
+    if not info:
+        return responder("❌ No existe plan de mantenimiento para esa máquina.")
+
+    # Construcción dinámica del menú con intervalos
+    lista = ""
+    i = 1
+    claves_intervalos = list(info["intervalos"].keys())
+    ses["mant_intervalos_lista"] = claves_intervalos  # guardar orden de intervalos
+
+    for clave in claves_intervalos:
+        etiqueta = info["intervalos"][clave]["label"]
+        lista += f"{i}️⃣ {etiqueta}<br>"
+        i += 1
+
+    return responder(
+        f"📘 <b>Plan de mantenimiento — {info['nombre']}</b><br><br>"
+        f"Selecciona el intervalo:<br><br>{lista}<br>9️⃣ Volver"
+    )
+
+
+
+    
+
     # ================= CÓDIGOS =================
     if estado == "pidiendo_codigos":
 
