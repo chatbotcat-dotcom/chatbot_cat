@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, make_response
 import pg8000
 import re
 import os
-import pdfkit
+from weasyprint import HTML, CSS
 from datetime import datetime
 import urllib.parse as urlparse
 
@@ -1046,6 +1046,17 @@ CONTACTOS_SOPORTE = [
 
 
 # ============================================================
+#  GENERADOR DE PDF (WeasyPrint)
+# ============================================================
+
+def generar_pdf(html_content: str):
+    """
+    Recibe un HTML renderizado como string y devuelve un PDF en bytes.
+    """
+    pdf_bytes = HTML(string=html_content).write_pdf()
+    return pdf_bytes
+
+# ============================================================
 #  RUTA PRINCIPAL
 # ============================================================
 @app.route("/")
@@ -1054,52 +1065,56 @@ def home():
 
 
 # ============================================================
-#  RUTA PDF — USA LO ÚLTIMO QUE EL USUARIO CONSULTÓ
+#  GENERA PDF A PARTIR DE HTML ENVIADO DIRECTO
 # ============================================================
-@app.route("/reporte_pdf")
-def reporte_pdf():
-    user_id = "usuario_unico"
-    ses = obtener_sesion(user_id)
+@app.route("/generar_pdf", methods=["POST"])
+def generar_pdf_api():
+    data = request.get_json()
+    html = data.get("html")
 
-    modelo = ses.get("model") or "N/D"
-    serie = ses.get("serial3") or "N/D"
-    codigos = ses.get("reporte_codigos", [])
-    eventos = ses.get("reporte_eventos", [])
+    if not html:
+        return jsonify({"error": "No se envió HTML"}), 400
 
-    ahora = datetime.now()
-    fecha = ahora.strftime("%d/%m/%Y")
-    hora = ahora.strftime("%H:%M")
+    pdf_bytes = generar_pdf(html)
 
-    html = render_template(
-        "reporte_diagnostico.html",
-        modelo=modelo,
-        serie=serie,
-        fecha=fecha,
-        hora=hora,
-        codigos=codigos,
-        eventos=eventos,
-        contactos=CONTACTOS_SOPORTE,
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=FerreyDoc_HTML.pdf"}
     )
 
-    # 👉 Si quieres ver primero el HTML, descomenta esta línea:
-    # return html
 
-    options = {
-        "page-size": "A4",
-        "encoding": "UTF-8",
-        "margin-top": "10mm",
-        "margin-bottom": "10mm",
-        "margin-left": "10mm",
-        "margin-right": "10mm",
-    }
+# ============================================================
+#  GENERA PDF DESDE TEMPLATE (REPORTE PROFESIONAL)
+# ============================================================
+@app.route("/generar_reporte", methods=["POST"])
+def generar_reporte():
+    data = request.get_json()
 
-    pdf = pdfkit.from_string(html, False, options=options)
+    modelo = data.get("modelo")
+    serie = data.get("serie")
+    codigos = data.get("codigos", [])
+    eventos = data.get("eventos", [])
 
-    response = make_response(pdf)
-    response.headers["Content-Type"] = "application/pdf"
-    response.headers["Content-Disposition"] = "attachment; filename=reporte_ferreydoc.pdf"
+    # Renderizamos HTML usando tu plantilla profesional
+    html_renderizado = render_template(
+        "reporte_pdf.html",
+        modelo=modelo,
+        serie=serie,
+        codigos=codigos,
+        eventos=eventos,
+        contactos=CONTACTOS_SOPORTE,   # si deseas agregar contactos
+    )
 
-    return response
+    # Convertimos a PDF usando WeasyPrint
+    pdf_bytes = generar_pdf(html_renderizado)
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=FerreyDoc_Reporte.pdf"}
+    )
+
 
 
 # ============================================================
