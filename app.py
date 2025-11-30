@@ -1031,8 +1031,11 @@ def enviar():
     if estado == "inicio":
         ses["estado"] = "esperando_consentimiento"
         return responder(
-            "👋 Hola, soy <b>FerreyDoc</b>, tu asistente técnico CAT.<br><br>"
-            "¿Aceptas compartir modelo y serie del equipo?<br>"
+            "👋 ¡Hola, soy <b>FerreyDoc</b>, tu asistente técnico CAT.<br><br>"
+            "Estoy diseñado para orientarte respecto a Códigos y Eventos<br>"
+            "Además puedo brindarte consejos acerca del Mantenimiento de tu Equipo<br>"
+            "Antes de comenzar necesitaré unos datos<br>"
+            "¿Estás de acuerdo con brindar información sobre tu equipo CAT?<br>"
             "1️⃣ Sí<br>2️⃣ No"
         )
 
@@ -1064,14 +1067,13 @@ def enviar():
         return responder(
             f"✔ Modelo: <b>{ses['model']}</b><br>"
             f"✔ Serie: <b>{ses['serial3']}</b><br><br>"
-            "¿Qué deseas hacer?<br>"
+            "A continuación, escribe el número de la consulta que deseas realizar:<br>"
             "1️⃣ Códigos<br>"
             "2️⃣ Eventos<br>"
-            "3️⃣ Mantenimiento<br>"
-            "4️⃣ Dif. código vs evento<br>"
+            "3️⃣ Consejos de Mantenimiento Preventivo<br>"
+            "4️⃣ ¿Cómo diferencio un Código de un Evento?<br>"
             "5️⃣ Cambiar máquina<br>"
             "6️⃣ Finalizar<br>"
-            "7️⃣ Generar PDF"
         )
 
     # ==================== MENU PRINCIPAL ====================
@@ -1080,15 +1082,15 @@ def enviar():
         if mensaje == "1":
             ses["estado"] = "pidiendo_codigos"
             return responder(
-                "Ingresa códigos CID/FMI separados por coma.<br>"
-                "Ej: 168-04, 028 168 04"
+                "Por favor escribe el código CID/FMI del que necesitas información. Puedes ingresas hasta 5 códigos separados por coma.<br>"
+                "Ej: 168-4"
             )
 
         if mensaje == "2":
             ses["estado"] = "pidiendo_eventos"
             return responder(
-                "Ingresa eventos EID/Level separados por coma.<br>"
-                "Ej: E0117, 0117 (2)"
+                "Por favor escribe el evento EID/Level del que necesitas informaicón. Puedes ingresar hasta 5 eventos separados por coma.<br>"
+                "Ej: E0117(2)"
             )
 
         if mensaje == "3":
@@ -1103,10 +1105,23 @@ def enviar():
             )
 
         if mensaje == "4":
-            return responder(
-                "<b>Código (CID/FMI):</b> Problema mecánico/eléctrico puntual.<br>"
-                "<b>Evento (EID/Level):</b> Registro histórico de condición."
-            )
+           return responder(
+    "<b>¿Cuál es la diferencia entre un Código y un Evento?</b><br><br>"
+
+    "<b>🔧 Código (CID/FMI):</b><br>"
+    "• Formato: <b>XXXX-Y</b>.<br>"
+    "• Ejemplo: <b>4651-9</b>.<br>"
+    "• Describe una <u>falla mecánica o eléctrica puntual</u>.<br><br>"
+
+    "<b>📘 Evento (EID/Level):</b><br>"
+    "• Formato: <b>E#####(L)</b>.<br>"
+    "• Ejemplo: <b>E60104(2)</b>.<br>"
+    "• Describe una <u>condición operativa o mal uso detectado</u>.<br><br>"
+
+    "Aquí tienes un ejemplo real sobre cómo aparece en pantalla:",
+    extra={"imagen": "/static/ejemplos/codigos_eventos.png"}
+)
+
 
         if mensaje == "5":
             resetear_sesion(user_id)
