@@ -1119,7 +1119,7 @@ def enviar():
     "• Describe una <u>condición operativa o mal uso detectado</u>.<br><br>"
 
     "Aquí tienes un ejemplo real sobre cómo aparece en pantalla:",
-    extra={"imagen": "/static/ejemplos/codigos_eventos.png"}
+    extra={"imagen": "/static/ejemplos/codigos_eventos.jpg"}
 )
 
 
