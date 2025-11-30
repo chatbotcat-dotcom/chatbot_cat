@@ -8,11 +8,13 @@ html, body {
     height: 100%;
     background: #FFFFFF;
     font-family: 'Inter', sans-serif;
+    overflow: hidden; /* Evita scroll del body, solo scrollea el chat */
 }
 
 /* PAGE */
 .chat-page {
-    height: 100vh;
+    min-height: 100vh;       /* Altura mínima pantalla completa */
+    height: 100%;            /* Ocupa todo el alto disponible */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -23,7 +25,7 @@ html, body {
 .chat-container {
     width: 100%;
     max-width: 420px;
-    height: 90vh;
+    height: 90vh;            /* En desktop sigue siendo un "card" */
     background: #ffffff;
     border-radius: 32px;
     overflow: hidden;
@@ -77,6 +79,7 @@ html, body {
     background: #FAFAFA;
     padding: 18px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* Scroll suave en móviles */
 }
 
 /* BOT MESSAGE */
@@ -210,3 +213,28 @@ html, body {
     0%, 100% { opacity: .2; }
     50% { opacity: 1; }
 }
+
+/* ========================= */
+/*   AJUSTES PARA MÓVIL      */
+/* ========================= */
+
+@media (max-width: 768px) {
+    html, body {
+        height: 100%;
+        overflow: hidden; /* Evita scroll de fondo cuando aparece el teclado */
+    }
+
+    .chat-page {
+        height: 100%;
+        align-items: stretch; /* Deja de centrar verticalmente el card */
+        padding: 0;          /* El chat ocupa toda la pantalla */
+    }
+
+    .chat-container {
+        height: 100%;        /* Ahora el contenedor usa todo el alto */
+        max-width: 100%;
+        border-radius: 0;    /* Estilo “app completa” tipo WhatsApp */
+        box-shadow: none;
+    }
+}
+
