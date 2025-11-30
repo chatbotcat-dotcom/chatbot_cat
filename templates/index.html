@@ -79,6 +79,23 @@
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
+    function addBotImage(url) {
+    const hora = horaActual();
+    chatBox.innerHTML += `
+        <div class="bot-msg">
+            <img src="{{ url_for('static', filename='img/FerreyDoc.png') }}" class="msg-avatar">
+            <div class="msg-block">
+                <div class="bot-bubble">
+                    <img src="${url}" class="bot-image" style="max-width: 100%; border-radius: 10px;">
+                </div>
+                <div class="msg-time-left">${hora}</div>
+            </div>
+        </div>
+    `;
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+
     function addUserMessage(text) {
         const hora = horaActual();
 
@@ -154,7 +171,18 @@
         }
         // ---------------------------------------------------------
 
-        addBotMessage(data.respuesta);
+// Mostrar texto
+if (data.respuesta) {
+    addBotMessage(data.respuesta);
+}
+
+// Mostrar imagen (si viene del backend)
+if (data.imagen) {
+    addBotImage(data.imagen);
+}
+
+
+        
     }
 
     inputMensaje.addEventListener("keydown", function (event) {
