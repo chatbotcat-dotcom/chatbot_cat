@@ -1019,6 +1019,7 @@ def enviar():
     ses = obtener_sesion(user_id)
     estado = ses["estado"]
 
+    # -------- Función responder() interna --------
     def responder(texto, extra=None):
         texto = f"<div style='max-width:100%; word-wrap:break-word;'>{texto}</div>"
         payload = {"respuesta": texto}
@@ -1026,7 +1027,7 @@ def enviar():
             payload.update(extra)
         return jsonify(payload)
 
-    # ================= BIENVENIDA =================
+    # ===================== BIENVENIDA =====================
     if estado == "inicio":
         ses["estado"] = "esperando_consentimiento"
         return responder(
@@ -1035,7 +1036,7 @@ def enviar():
             "1️⃣ Sí<br>2️⃣ No"
         )
 
-    # =============== CONSENTIMIENTO ================
+    # ================= CONSENTIMIENTO =====================
     if estado == "esperando_consentimiento":
         if mensaje == "1":
             ses["estado"] = "pidiendo_modelo"
@@ -1047,7 +1048,7 @@ def enviar():
 
         return responder("Debes responder 1 o 2.")
 
-    # =================== MODELO ====================
+    # ===================== MODELO =====================
     if estado == "pidiendo_modelo":
         ses["model"] = mensaje.upper()
         ses["estado"] = "pidiendo_serie"
@@ -1056,7 +1057,7 @@ def enviar():
             "Ahora ingresa los <b>primeros 3 dígitos</b> de la serie."
         )
 
-    # ==================== SERIE ====================
+    # ===================== SERIE ======================
     if estado == "pidiendo_serie":
         ses["serial3"] = mensaje[:3].upper()
         ses["estado"] = "menu_principal"
@@ -1073,135 +1074,130 @@ def enviar():
             "7️⃣ Generar PDF"
         )
 
-# ==================== MENU PRINCIPAL ====================
-if estado == "menu_principal":
+    # ==================== MENU PRINCIPAL ====================
+    if estado == "menu_principal":
 
-    if mensaje == "1":
-        ses["estado"] = "pidiendo_codigos"
+        if mensaje == "1":
+            ses["estado"] = "pidiendo_codigos"
+            return responder(
+                "Ingresa códigos CID/FMI separados por coma.<br>"
+                "Ej: 168-04, 028 168 04"
+            )
+
+        if mensaje == "2":
+            ses["estado"] = "pidiendo_eventos"
+            return responder(
+                "Ingresa eventos EID/Level separados por coma.<br>"
+                "Ej: E0117, 0117 (2)"
+            )
+
+        if mensaje == "3":
+            ses["estado"] = "mant_elegir_maquina"
+            return responder(
+                "Selecciona el tipo de maquinaria:<br>"
+                "1️⃣ Rodillo<br>"
+                "2️⃣ Cargador<br>"
+                "3️⃣ Excavadora<br>"
+                "4️⃣ Tractor<br>"
+                "9️⃣ Volver"
+            )
+
+        if mensaje == "4":
+            return responder(
+                "<b>Código (CID/FMI):</b> Problema mecánico/eléctrico puntual.<br>"
+                "<b>Evento (EID/Level):</b> Registro histórico de condición."
+            )
+
+        if mensaje == "5":
+            resetear_sesion(user_id)
+            return responder("Ingresa el nuevo <b>MODELO</b>.")
+
+        if mensaje == "6":
+            resetear_sesion(user_id)
+            return responder("Gracias por usar FerreyDoc 🤝")
+
+        # ============= GENERAR PDF =============
+        if mensaje == "7":
+
+            html = render_template(
+                "reporte_diagnostico.html",
+                modelo=ses.get("model") or "N/D",
+                serie=ses.get("serial3") or "N/D",
+                codigos=ses.get("reporte_codigos", []),
+                eventos=ses.get("reporte_eventos", []),
+                contactos=CONTACTOS_SOPORTE,
+                now=datetime.now().strftime("%Y-%m-%d %H:%M")
+            )
+
+            pdf_bytes = generar_pdf(html)
+            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+            # Resetear historial tras generar reporte
+            ses["reporte_codigos"] = []
+            ses["reporte_eventos"] = []
+
+            return responder(
+                "📄 Tu reporte PDF está listo para descargar.",
+                {"pdf_base64": pdf_b64, "filename": "FerreyDoc_Reporte.pdf"}
+            )
+
+        return responder("Elige una opción válida (1–7).")
+
+    # ==================== MANTENIMIENTO — ELEGIR MÁQUINA ====================
+    if estado == "mant_elegir_maquina":
+
+        if mensaje == "1":
+            ses["mant_maquina"] = "rodillo"
+
+        elif mensaje == "2":
+            ses["mant_maquina"] = "cargador"
+
+        elif mensaje == "3":
+            ses["mant_maquina"] = "excavadora"
+
+        elif mensaje == "4":
+            ses["mant_maquina"] = "tractor"
+
+        elif mensaje == "9":
+            ses["estado"] = "menu_principal"
+            return responder(
+                "¿Qué deseas hacer?<br>"
+                "1️⃣ Códigos<br>"
+                "2️⃣ Eventos<br>"
+                "3️⃣ Mantenimiento<br>"
+                "4️⃣ Dif. código vs evento<br>"
+                "5️⃣ Cambiar máquina<br>"
+                "6️⃣ Finalizar<br>"
+                "7️⃣ Generar PDF"
+            )
+
+        else:
+            return responder("Selecciona una opción válida (1–4 o 9).")
+
+        # Si eligió máquina válida
+        ses["estado"] = "mant_elegir_intervalo"
+        maquina = ses["mant_maquina"]
+        info = PLAN_MANTENIMIENTO.get(maquina)
+
+        if not info:
+            return responder("❌ No existe plan de mantenimiento para esa máquina.")
+
+        # Construcción dinámica del menú de intervalos
+        lista = ""
+        claves = list(info["intervalos"].keys())
+        ses["mant_intervalos_lista"] = claves  # guardamos orden real
+
+        i = 1
+        for clave in claves:
+            etiqueta = info["intervalos"][clave]["label"]
+            lista += f"{i}️⃣ {etiqueta}<br>"
+            i += 1
+
         return responder(
-            "Ingresa códigos CID/FMI separados por coma.<br>"
-            "Ej: 168-04, 028 168 04"
+            f"📘 <b>Plan de mantenimiento — {info['nombre']}</b><br><br>"
+            f"Selecciona el intervalo:<br><br>{lista}<br>9️⃣ Volver"
         )
 
-    if mensaje == "2":
-        ses["estado"] = "pidiendo_eventos"
-        return responder(
-            "Ingresa eventos EID/Level separados por coma.<br>"
-            "Ej: E0117, 0117 (2)"
-        )
-
-    if mensaje == "3":
-        ses["estado"] = "mant_elegir_maquina"
-        return responder(
-            "Selecciona el tipo de maquinaria:<br>"
-            "1️⃣ Rodillo<br>"
-            "2️⃣ Cargador<br>"
-            "3️⃣ Excavadora<br>"
-            "4️⃣ Tractor<br>"
-            "9️⃣ Volver"
-        )
-
-    if mensaje == "4":
-        return responder(
-            "<b>Código (CID/FMI):</b> Problema mecánico/eléctrico puntual.<br>"
-            "<b>Evento (EID/Level):</b> Registro histórico de condición."
-        )
-
-    if mensaje == "5":
-        resetear_sesion(user_id)
-        return responder("Ingresa el nuevo <b>MODELO</b>.")
-
-    if mensaje == "6":
-        resetear_sesion(user_id)
-        return responder("Gracias por usar FerreyDoc 🤝")
-
-    # ============= GENERAR PDF =============
-    if mensaje == "7":
-
-        html = render_template(
-            "reporte_diagnostico.html",
-            modelo=ses.get("model") or "N/D",
-            serie=ses.get("serial3") or "N/D",
-            codigos=ses.get("reporte_codigos", []),
-            eventos=ses.get("reporte_eventos", []),
-            contactos=CONTACTOS_SOPORTE,
-            now=datetime.now().strftime("%Y-%m-%d %H:%M")
-        )
-
-        pdf_bytes = generar_pdf(html)
-        pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
-
-        # Resetear historial tras generar reporte
-        ses["reporte_codigos"] = []
-        ses["reporte_eventos"] = []
-
-        return responder(
-            "📄 Tu reporte PDF está listo para descargar.",
-            {"pdf_base64": pdf_b64, "filename": "FerreyDoc_Reporte.pdf"}
-        )
-
-    return responder("Elige una opción válida (1–7).")
-
-
-
-# ==================== MANTENIMIENTO — ELEGIR MÁQUINA ====================
-if estado == "mant_elegir_maquina":
-
-    if mensaje == "1":
-        ses["mant_maquina"] = "rodillo"
-
-    elif mensaje == "2":
-        ses["mant_maquina"] = "cargador"
-
-    elif mensaje == "3":
-        ses["mant_maquina"] = "excavadora"
-
-    elif mensaje == "4":
-        ses["mant_maquina"] = "tractor"
-
-    elif mensaje == "9":
-        ses["estado"] = "menu_principal"
-        return responder(
-            "¿Qué deseas hacer?<br>"
-            "1️⃣ Códigos<br>"
-            "2️⃣ Eventos<br>"
-            "3️⃣ Mantenimiento<br>"
-            "4️⃣ Dif. código vs evento<br>"
-            "5️⃣ Cambiar máquina<br>"
-            "6️⃣ Finalizar<br>"
-            "7️⃣ Generar PDF"
-        )
-
-    else:
-        return responder("Selecciona una opción válida (1–4 o 9).")
-
-    # Si eligió máquina válida
-    ses["estado"] = "mant_elegir_intervalo"
-    maquina = ses["mant_maquina"]
-    info = PLAN_MANTENIMIENTO.get(maquina)
-
-    if not info:
-        return responder("❌ No existe plan de mantenimiento para esa máquina.")
-
-    # Construcción dinámica del menú de intervalos
-    lista = ""
-    claves = list(info["intervalos"].keys())
-    ses["mant_intervalos_lista"] = claves  # guardamos orden real
-
-    i = 1
-    for clave in claves:
-        etiqueta = info["intervalos"][clave]["label"]
-        lista += f"{i}️⃣ {etiqueta}<br>"
-        i += 1
-
-    return responder(
-        f"📘 <b>Plan de mantenimiento — {info['nombre']}</b><br><br>"
-        f"Selecciona el intervalo:<br><br>{lista}<br>9️⃣ Volver"
-    )
-
-
-
-    
 
     # ================= CÓDIGOS =================
     if estado == "pidiendo_codigos":
