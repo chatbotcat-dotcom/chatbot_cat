@@ -8,13 +8,11 @@ html, body {
     height: 100%;
     background: #FFFFFF;
     font-family: 'Inter', sans-serif;
-    overflow: hidden; /* Evita scroll del body, solo scrollea el chat */
 }
 
 /* PAGE */
 .chat-page {
-    min-height: 100vh;       /* Altura mínima pantalla completa */
-    height: 100%;            /* Ocupa todo el alto disponible */
+    min-height: 100vh;        /* Ocupa al menos toda la pantalla */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -25,7 +23,7 @@ html, body {
 .chat-container {
     width: 100%;
     max-width: 420px;
-    height: 90vh;            /* En desktop sigue siendo un "card" */
+    max-height: 90vh;         /* Máxima altura, pero puede reducirse si la pantalla es pequeña */
     background: #ffffff;
     border-radius: 32px;
     overflow: hidden;
@@ -75,11 +73,10 @@ html, body {
 
 /* CHAT AREA */
 .chat-box {
-    flex: 1;
+    flex: 1;                  /* Ocupa todo el espacio disponible entre header e input */
     background: #FAFAFA;
     padding: 18px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch; /* Scroll suave en móviles */
+    overflow-y: auto;         /* Scroll interno solo para el área de mensajes */
 }
 
 /* BOT MESSAGE */
@@ -215,26 +212,26 @@ html, body {
 }
 
 /* ========================= */
-/*   AJUSTES PARA MÓVIL      */
+/*   AJUSTES RESPONSIVE      */
 /* ========================= */
 
 @media (max-width: 768px) {
-    html, body {
-        height: 100%;
-        overflow: hidden; /* Evita scroll de fondo cuando aparece el teclado */
-    }
-
+    /* El chat deja de estar "centrado" verticalmente: se ancla a la pantalla */
     .chat-page {
-        height: 100%;
-        align-items: stretch; /* Deja de centrar verticalmente el card */
-        padding: 0;          /* El chat ocupa toda la pantalla */
+        min-height: 100vh;
+        align-items: stretch;
+        padding: 0;
     }
 
     .chat-container {
-        height: 100%;        /* Ahora el contenedor usa todo el alto */
         max-width: 100%;
-        border-radius: 0;    /* Estilo “app completa” tipo WhatsApp */
+        max-height: none;     /* Permite usar todo el alto real */
+        height: 100vh;        /* App a pantalla completa tipo WhatsApp */
+        border-radius: 0;
         box-shadow: none;
     }
-}
 
+    .chat-box {
+        padding: 12px;        /* Un poco menos de padding para ganar espacio vertical */
+    }
+}
