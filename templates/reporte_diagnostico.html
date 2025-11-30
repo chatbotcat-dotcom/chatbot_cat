@@ -40,6 +40,7 @@
         width: 100%;
         border-collapse: collapse;
         margin-top: 10px;
+        table-layout: fixed; /* Importante para que el ancho se reparta fijo */
     }
 
     table, th, td {
@@ -60,6 +61,10 @@
 
     .small {
         font-size: 10px;
+        /* Forzar ruptura de URLs largas en PDF y navegadores */
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+        word-break: break-all;
     }
 
     .footer {
@@ -115,7 +120,7 @@
         <td>{{ c.causas }}</td>
         <td class="small">
             {% if c.url %}
-                {{ c.url }}
+                <a href="{{ c.url }}">{{ c.url }}</a>
             {% else %}
                 —
             {% endif %}
@@ -147,7 +152,7 @@
         <td>{{ e.descripcion }}</td>
         <td class="small">
             {% if e.url %}
-                {{ e.url }}
+                <a href="{{ e.url }}">{{ e.url }}</a>
             {% else %}
                 —
             {% endif %}
