@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, Response, url_for
+from flask import Flask, render_template, request, jsonify, Response
 import pg8000
 import re
 import os
@@ -21,6 +21,7 @@ def get_conn():
         raise RuntimeError("DATABASE_URL no está configurado.")
 
     url = urlparse.urlparse(db_url)
+
     return pg8000.connect(
         user=url.username,
         password=url.password,
@@ -29,7 +30,6 @@ def get_conn():
         database=url.path.lstrip('/'),
         ssl_context=True
     )
-
 
 # ============================================================
 #  SESIONES
@@ -54,9 +54,8 @@ def resetear_sesion(user_id):
     if user_id in sesiones:
         del sesiones[user_id]
 
-
 # ============================================================
-#  PARSEO — CÓDIGOS
+#  PARSEO DE CÓDIGOS
 # ============================================================
 def extraer_codigo(texto: str):
     t = texto.upper().replace("-", " ").replace(".", " ")
@@ -70,17 +69,22 @@ def extraer_codigo(texto: str):
 
     return None, None, None
 
-
 # ============================================================
-#  PARSEO — EVENTOS (Formato único)
+#  PARSEO DE EVENTOS (NUEVO FORMATO ÚNICO)
 # ============================================================
 def extraer_evento(texto: str):
+    """
+    Formato único permitido: E + números + (nivel)
+    Ejemplo: E1234(2)  con nivel 1, 2 o 3
+    """
     t = texto.strip().upper()
     m = re.fullmatch(r"E(\d+)\(([123])\)", t)
     if not m:
         return None, None
-    return f"E{m.group(1)}", m.group(2)
 
+    eid = f"E{m.group(1)}"   # E + números
+    level = m.group(2)       # 1, 2 o 3
+    return eid, level
 
 # ============================================================
 #  PLAN DE MANTENIMIENTO
@@ -105,74 +109,31 @@ PLAN_MANTENIMIENTO = {
                         "Revisar nivel de aceite del motor"
                     ],
                     "⛽ Combustible": [
-                        "Inspeccionar el separador de agua del sistema de combustible"
-                    ],
-                    "🧮 Sistema hidráulico": [
-                        "Revisar el nivel de aceite del sistema hidráulico"
+                        "Drenar separador de agua del sistema de combustible"
                     ]
                 }
             },
             "50h": {
                 "label": "50 horas de servicio",
                 "bloques": {
-                    "⛽ Combustible": [
-                        "Drenar agua y sedimento en el tanque de combustible"
-                    ],
-                    "⚙️ Componentes estructurales / hoja": [
-                        "Lubricar la hoja niveladora",
-                        "Lubricar extremos del cilindro de la dirección"
-                    ],
-                    "🛞 Neumáticos": [
-                        "Revisar inflado de los neumáticos"
+                    "🛢️ Motor": [
+                        "Cambiar aceite del motor y filtro según indicaciones"
                     ]
                 }
             },
             "250h": {
-                "label": "Primeras 250 h y cada 250 h",
+                "label": "250 horas de servicio",
                 "bloques": {
-                    "🛞 Ejes y mandos finales": [
-                        "Cambiar aceite del eje trasero (primeras 250 horas)",
-                        "Cambiar aceite del planetario del mando final (eje)",
-                        "Cambiar aceite del planetario del mando final (tambor)",
-                        "Cambiar aceite del soporte vibratorio",
-                        "Revisar nivel de aceite del eje trasero (cada 250 horas)",
-                        "Revisar nivel de aceite del planetario del mando final (eje)",
-                        "Revisar nivel de aceite del planetario del mando final (tambor)",
-                        "Revisar nivel de aceite del soporte vibratorio"
-                    ],
-                    "🧪 Muestreo de fluidos": [
-                        "Obtener muestra de refrigerante del sistema de enfriamiento (nivel 1)",
-                        "Obtener muestra de aceite del motor"
-                    ],
-                    "⚙️ Sistema vibratorio / tambor": [
-                        "Inspeccionar montajes de aislamiento del tambor"
-                    ],
-                    "🔧 Transmisión y correas": [
-                        "Inspeccionar/ajustar/reemplazar correas"
+                    "🧮 Sistema hidráulico": [
+                        "Obtener muestra de aceite del sistema hidráulico"
                     ]
                 }
             },
             "500h": {
                 "label": "500 horas de servicio",
                 "bloques": {
-                    "🛢️ Motor": [
-                        "Obtener muestra de aceite del eje",
-                        "Cambiar aceite y filtro del motor"
-                    ],
-                    "⛽ Sistema de combustible": [
-                        "Reemplazar filtro del sistema de combustible (en línea)",
-                        "Reemplazar elemento de filtro primario del sistema de combustible (separador de agua)",
-                        "Reemplazar filtro secundario del sistema de combustible",
-                        "Limpiar colador del tanque de combustible"
-                    ],
-                    "🧮 Sistema hidráulico y vibratorio": [
-                        "Obtener muestra de aceite del sistema hidráulico",
-                        "Obtener muestra de aceite del soporte vibratorio"
-                    ],
-                    "🛡️ Seguridad y estructura": [
-                        "Revisar freno de estacionamiento",
-                        "Revisar par de los pernos del juego de revestimiento",
-                        "Ajustar pestillo del capó"
+                    "🧮 Sistema hidráulico": [
+                        "Reemplazar filtro de aceite del sistema hidráulico"
                     ]
                 }
             },
@@ -180,95 +141,50 @@ PLAN_MANTENIMIENTO = {
                 "label": "1000 horas de servicio",
                 "bloques": {
                     "🛞 Ejes y mandos finales": [
-                        "Cambiar aceite del eje trasero",
-                        "Cambiar aceite del planetario del mando final (eje)",
-                        "Cambiar aceite del planetario del mando final (tambor)",
-                        "Obtener muestra de aceite del planetario del mando final (eje)",
-                        "Obtener muestra de aceite del planetario del mando final (tambor)"
-                    ],
-                    "🧮 Sistema hidráulico": [
-                        "Reemplazar filtro de aceite del sistema hidráulico",
-                        "Reemplazar respiradero del tanque hidráulico"
-                    ],
-                    "⚙️ Dirección / estructura": [
-                        "Reemplazar cartucho del sistema de dirección",
-                        "Inspeccionar Estructura de Protección en Caso de Vuelcos (ROPS)"
-                    ],
-                    "🔊 Sistema vibratorio": [
-                        "Cambiar aceite del soporte vibratorio"
-                    ],
-                    "🧊 Sistema de enfriamiento": [
-                        "Limpiar/reemplazar tapa de presión del sistema de enfriamiento"
+                        "Cambiar aceite de ejes y mandos finales según manual"
                     ]
                 }
             },
             "2000h": {
                 "label": "2000 horas de servicio",
                 "bloques": {
-                    "⚙️ Sistema vibratorio / tambor": [
-                        "Reemplazar montajes de aislamiento del tambor"
-                    ],
-                    "⛽ Combustible": [
-                        "Reemplazar filtro de la tapa del tanque de combustible"
+                    "🧊 Sistema de enfriamiento": [
+                        "Obtener muestra de refrigerante del sistema de enfriamiento"
                     ]
                 }
             },
             "3000h": {
                 "label": "3000 horas de servicio",
                 "bloques": {
-                    "🧊 Sistema de enfriamiento": [
-                        "Reemplazar termostato del agua del sistema de enfriamiento",
-                        "Cambiar aceite de la caja de las pesas excéntricas",
-                        "Cambiar aceite del sistema hidráulico"
+                    "🧮 Sistema hidráulico": [
+                        "Reemplazar filtro de aceite del sistema hidráulico (retorno)"
                     ]
                 }
             },
             "6000h": {
                 "label": "6000 horas de servicio o cada 3 años",
                 "bloques": {
-                    "🧊 Sistema de enfriamiento": [
-                        "Agregar prolongador de vida útil de refrigerante en el sistema de enfriamiento (ELC)"
+                    "🧮 Sistema hidráulico": [
+                        "Cambiar aceite del sistema hidráulico"
                     ],
-                    "🛡️ Seguridad": [
-                        "Reemplazar cinturón de seguridad (cada 3 años)"
+                    "🧊 Sistema de enfriamiento": [
+                        "Agregar prolongador de vida útil del refrigerante (ELC)"
                     ]
                 }
             },
             "largo_plazo": {
-                "label": "Intervalos largos (10 000 h, 12 000 h y tareas anuales)",
+                "label": "Intervalos largos (3 años, 5000 h, 10 000 h, 12 000 h y tareas condicionales)",
                 "bloques": {
-                    "🧊 Sistema de enfriamiento y refrigerante": [
-                        "Obtener muestra de refrigerante del sistema de enfriamiento (nivel 2) – cada año",
-                        "Cambiar refrigerante del sistema de enfriamiento (ELC) cada 12 000 horas o 6 años"
+                    "🛡️ Seguridad": [
+                        "Reemplazar cinturón de seguridad cada 3 años"
                     ],
-                    "🧪 Sistema de emisiones DEF": [
-                        "Reemplazar filtros del múltiple de DEF (cada 10 000 horas)"
+                    "🧊 Sistema de enfriamiento": [
+                        "Cambiar refrigerante ELC cada 12 000 horas o 6 años"
                     ],
                     "🔁 Tareas cuando sea necesario": [
-                        "Limpiar/revisar batería",
-                        "Reciclar batería cuando corresponda",
-                        "Inspeccionar/reemplazar batería o cable de batería",
-                        "Limpiar/reemplazar filtro de aire de la cabina",
-                        "Inspeccionar/reemplazar cuchillas (hoja niveladora)",
-                        "Limpiar rejilla del tubo de llenado de DEF",
-                        "Llenar fluido de escape diésel",
-                        "Limpiar/reemplazar filtro de fluido de escape diésel",
-                        "Lubricar pestillos de la puerta",
-                        "Cambiar aceite de enfriamiento del tambor",
-                        "Inspeccionar/ajustar/reemplazar raspadores del tambor",
-                        "Limpiar/reemplazar elemento de filtro de aire primario del motor",
-                        "Reemplazar elemento de filtro de aire secundario del motor",
-                        "Limpiar calcomanía (identificación del producto)",
-                        "Cebar sistema de combustible",
-                        "Drenar separador de agua del sistema de combustible",
-                        "Reemplazar fusibles según se requiera",
-                        "Inspeccionar filtro de aceite",
-                        "Limpiar núcleo del radiador",
-                        "Cambiar distancia entre neumáticos cuando se requiera",
-                        "Apretar tuercas de las ruedas",
-                        "Llenar depósito del lavaparabrisas",
-                        "Inspeccionar/reemplazar limpiaparabrisas",
-                        "Limpiar ventanas"
+                        "Inspeccionar filtro de aire de cabina",
+                        "Revisar nivel de electrolito de baterías",
+                        "Limpiar núcleos de enfriamiento"
                     ]
                 }
             },
@@ -276,8 +192,8 @@ PLAN_MANTENIMIENTO = {
                 "label": "Resumen general del programa de mantenimiento",
                 "bloques": {
                     "📋 Recordatorios generales": [
+                        "Utilizar horas de servicio, consumo de combustible, kilometraje o tiempo de calendario (lo que ocurra primero) para definir los intervalos.",
                         "Antes de efectuar las tareas de un intervalo consecutivo, realizar también las tareas de los intervalos anteriores.",
-                        "Si no se cumplen las horas de servicio, realizar entre 10 y 100 horas al menos cada 3 meses; entre 250 y 500 horas al menos cada 6 meses; entre 1000 y 2500 horas al menos una vez al año.",
                         "Seguir siempre las instrucciones de seguridad, advertencias y regulaciones de emisiones indicadas por el fabricante."
                     ]
                 }
@@ -286,187 +202,99 @@ PLAN_MANTENIMIENTO = {
     },
 
     # =======================================================
-    # CARGADOR DE RUEDAS
+    # CARGADOR
     # =======================================================
     "cargador": {
         "nombre": "Cargador de ruedas",
-        "link": "https://sis2.cat.com/#/detail?keyword=Maintenance+Interval+Schedule&infoType=13&serviceMediaNumber=SEBU9108&serviceIeSystemControlNumber=i06271337&tab=service",
+        "link": "https://sis2.cat.com/#/detail?keyword=Maintenance+Interval+Schedule&infoType=13&serviceMediaNumber=M0080860&serviceIeSystemControlNumber=i07103985&tab=service",
         "intervalos": {
             "diario_10h": {
                 "label": "Cada día / 10 horas de servicio",
                 "bloques": {
-                    "🛡️ Seguridad y cabina": [
-                        "Probar alarma de retroceso",
-                        "Inspeccionar cinturón de seguridad",
-                        "Inspeccionar herramienta",
-                        "Lubricar herramienta según aplique"
-                    ],
                     "🛢️ Motor y enfriamiento": [
-                        "Limpiar/inspeccionar válvula de polvo del filtro de aire",
-                        "Revisar nivel de refrigerante del sistema de enfriamiento",
-                        "Revisar nivel de aceite del motor"
+                        "Revisar nivel de aceite del motor",
+                        "Revisar nivel de refrigerante del sistema de enfriamiento"
                     ],
-                    "🧮 Sistema hidráulico": [
-                        "Revisar nivel de aceite del sistema hidráulico"
-                    ],
-                    "⚙️ Transmisión": [
-                        "Revisar nivel de aceite de la transmisión"
+                    "🛞 Neumáticos y estructura": [
+                        "Inspeccionar neumáticos",
+                        "Revisar pasadores y puntos de articulación"
                     ]
                 }
             },
             "50h": {
                 "label": "50 horas de servicio",
                 "bloques": {
-                    "⚙️ Componentes estructurales / cucharón": [
-                        "Lubricar cojinetes de pivote inferiores del cucharón",
-                        "Lubricar varillaje del cucharón y cojinetes del cilindro del cargador"
-                    ],
-                    "🌬️ Cabina y aire": [
-                        "Limpiar/reemplazar filtro de aire de la cabina"
-                    ],
-                    "⛽ Combustible": [
-                        "Drenar filtro primario del sistema de combustible (separador de agua)"
-                    ],
-                    "🛞 Neumáticos": [
-                        "Revisar inflado de los neumáticos"
-                    ]
-                }
-            },
-            "100h": {
-                "label": "100 horas de servicio",
-                "bloques": {
-                    "⚙️ Dirección y articulaciones": [
-                        "Lubricar cojinetes de oscilación del eje",
-                        "Probar dirección secundaria",
-                        "Lubricar cojinetes del cilindro de la dirección"
-                    ],
-                    "⚙️ Varillaje de cucharón": [
-                        "Lubricar varillaje del cucharón y cojinetes del cilindro del cargador (si no se hizo en 50 h)"
+                    "🧮 Sistema hidráulico": [
+                        "Revisar nivel de aceite hidráulico"
                     ]
                 }
             },
             "250h": {
                 "label": "250 horas de servicio",
                 "bloques": {
-                    "🛞 Frenos y transmisión": [
-                        "Revisar acumulador del freno",
-                        "Realizar prueba del sistema de frenos"
-                    ],
-                    "🛞 Diferencial y mandos finales": [
-                        "Revisar nivel de aceite del diferencial y del mando final",
-                        "Lubricar estrías del eje motriz (central)",
-                        "Lubricar cojinete de soporte del eje motriz"
-                    ],
                     "🛢️ Motor": [
-                        "Cambiar aceite y filtro del motor",
-                        "Obtener muestra de aceite del motor"
+                        "Cambiar aceite y filtro del motor"
                     ]
                 }
             },
             "500h": {
-                "label": "Primeras 500 h y cada 500 h",
+                "label": "500 horas de servicio",
                 "bloques": {
-                    "🛢️ Motor y refrigerante": [
-                        "Revisar juego de válvulas del motor (primeras 500 horas)",
-                        "Obtener muestra de refrigerante del sistema de enfriamiento",
-                    ],
-                    "⛽ Combustible": [
-                        "Obtener muestra de aceite del diferencial y del mando final",
-                        "Reemplazar elemento de filtro primario del sistema de combustible (separador de agua)",
-                        "Reemplazar filtro secundario del sistema de combustible",
-                        "Limpiar colador del tanque de combustible"
-                    ],
-                    "🧮 Sistema hidráulico": [
-                        "Reemplazar filtro de aceite del sistema hidráulico",
-                        "Obtener muestra de aceite del sistema hidráulico"
-                    ],
-                    "⚙️ Transmisión": [
-                        "Reemplazar filtro de aceite de la transmisión",
-                        "Obtener muestra de aceite de la transmisión"
-                    ],
-                    "🔧 Correas": [
-                        "Inspeccionar/ajustar/reemplazar correas"
+                    "🛞 Ejes y mandos finales": [
+                        "Obtener muestra de aceite de mandos finales y ejes"
                     ]
                 }
             },
             "1000h": {
                 "label": "1000 horas de servicio",
                 "bloques": {
-                    "⚙️ Estructura y articulaciones": [
-                        "Lubricar cojinetes de articulación",
-                        "Lubricar uniones universales del eje motriz",
-                        "Inspeccionar Estructura de Protección en Caso de Vuelcos (ROPS)"
-                    ],
-                    "🛢️ Motor": [
-                        "Revisar juego de válvulas del motor (revisión periódica)"
-                    ],
-                    "⚙️ Transmisión": [
-                        "Cambiar aceite de la transmisión"
+                    "🧮 Sistema hidráulico": [
+                        "Reemplazar filtro de aceite del sistema hidráulico"
                     ]
                 }
             },
             "2000h": {
                 "label": "2000 horas de servicio",
                 "bloques": {
-                    "🔋 Sistema eléctrico y frenos": [
-                        "Limpiar, inspeccionar y reemplazar batería o cable de batería cuando corresponda",
-                        "Revisar discos de freno"
-                    ],
-                    "🛞 Diferencial y mandos finales": [
-                        "Cambiar aceite del diferencial y del mando final"
-                    ],
-                    "⛽ Combustible": [
-                        "Reemplazar filtro de la tapa del tanque de combustible"
+                    "🧊 Sistema de enfriamiento": [
+                        "Obtener muestra de refrigerante del sistema de enfriamiento"
                     ]
                 }
             },
             "3000h": {
                 "label": "3000 horas de servicio",
                 "bloques": {
-                    "🧮 Sistema hidráulico": [
-                        "Cambiar aceite del sistema hidráulico"
-                    ],
-                    "⚙️ Dirección": [
-                        "Lubricar estrías de la columna de dirección (dirección HMU)"
+                    "🧊 Sistema de enfriamiento": [
+                        "Reemplazar termostato del agua",
+                        "Cambiar aceite de cajas y mandos finales según instrucciones"
                     ]
                 }
             },
             "6000h": {
-                "label": "6000 horas de servicio",
+                "label": "6000 horas de servicio o cada 3 años",
                 "bloques": {
+                    "🧮 Sistema hidráulico": [
+                        "Cambiar aceite del sistema hidráulico"
+                    ],
                     "🧊 Sistema de enfriamiento": [
-                        "Agregar prolongador de vida útil de refrigerante en el sistema de enfriamiento (ELC)"
+                        "Agregar prolongador de vida útil de refrigerante (ELC)"
                     ]
                 }
             },
             "largo_plazo": {
-                "label": "Intervalos largos (3 años, 5000 h, 12 000 h y tareas condicionales)",
+                "label": "Intervalos largos (3 años, 5000 h, 10 000 h, 12 000 h y tareas condicionales)",
                 "bloques": {
-                    "🧊 Sistema de enfriamiento": [
-                        "Cambiar refrigerante del sistema de enfriamiento (ELC) cada 12 000 horas",
-                        "Obtener muestras de refrigerante según programa S·O·S"
-                    ],
-                    "🧊 Aire acondicionado": [
-                        "Reemplazar secador receptor (refrigerante) cada 5 000 horas"
-                    ],
                     "🛡️ Seguridad": [
                         "Reemplazar cinturón de seguridad cada 3 años"
                     ],
+                    "🧪 Sistema de emisiones y combustible": [
+                        "Reemplazar filtro de fluido de escape diésel (cada 5 000 horas)",
+                        "Reemplazar filtros del múltiple de DEF (cada 10 000 horas)"
+                    ],
                     "🔁 Tareas cuando sea necesario": [
-                        "Llenar tanque de grasa de lubricación automática",
-                        "Limpiar/reemplazar elemento de filtro de aire del motor",
-                        "Limpiar compartimiento del motor",
-                        "Reemplazar cilindro del auxiliar de arranque con éter",
-                        "Limpiar calcomanía (identificación del producto)",
-                        "Cebar sistema de combustible",
-                        "Drenar filtro primario del sistema de combustible (separador de agua)",
-                        "Reemplazar/reajustar fusibles y disyuntores",
-                        "Reemplazar luz de descarga de alta intensidad (HID)",
-                        "Inspeccionar filtro de aceite",
-                        "Limpiar núcleo del radiador",
-                        "Revisar acumulador del control de amortiguación",
-                        "Llenar depósito del lavaparabrisas",
-                        "Limpiar ventanas"
+                        "Inspeccionar/reemplazar filtros de aire de cabina",
+                        "Limpiar núcleos de enfriamiento",
+                        "Llenar fluido de escape diésel"
                     ]
                 }
             },
@@ -475,7 +303,6 @@ PLAN_MANTENIMIENTO = {
                 "bloques": {
                     "📋 Recordatorios generales": [
                         "Antes de efectuar las tareas de un intervalo consecutivo, realizar también las tareas de los intervalos anteriores.",
-                        "Si no se cumplen las horas de servicio, realizar entre 10 y 100 horas al menos cada 3 meses; entre 250 y 500 horas al menos cada 6 meses; entre 1 000 y 2 500 horas al menos una vez al año.",
                         "Seguir siempre las instrucciones de seguridad, advertencias y regulaciones de emisiones indicadas por el fabricante."
                     ]
                 }
@@ -494,100 +321,50 @@ PLAN_MANTENIMIENTO = {
                 "label": "Cada día / 10 horas de servicio",
                 "bloques": {
                     "🛢️ Motor y enfriamiento": [
-                        "Revisar nivel de refrigerante del sistema de enfriamiento",
-                        "Revisar nivel de aceite del motor"
+                        "Revisar nivel de aceite del motor",
+                        "Revisar nivel de refrigerante del sistema de enfriamiento"
                     ],
                     "⛽ Combustible": [
-                        "Drenar separador de agua del sistema de combustible",
-                        "Drenar agua y sedimento en el tanque de combustible"
+                        "Drenar separador de agua del sistema de combustible"
                     ],
                     "🧮 Sistema hidráulico": [
                         "Revisar nivel de aceite del sistema hidráulico"
                     ],
                     "🛡️ Seguridad": [
                         "Probar indicadores y medidores",
-                        "Inspeccionar cinturón de seguridad",
-                        "Probar alarma de desplazamiento"
-                    ],
-                    "⚙️ Tren de rodaje": [
-                        "Inspeccionar ajuste de la cadena",
-                        "Revisar tren de rodaje (undercarriage)"
+                        "Inspeccionar cinturón de seguridad"
                     ]
                 }
             },
             "50h": {
-                "label": "Cada 10 horas durante las primeras 50 h y luego cada 50 h",
+                "label": "50 horas de servicio",
                 "bloques": {
-                    "⚙️ Pluma, brazo y cucharón": [
-                        "Lubricar varillaje de la pluma y del brazo (cada 10 h durante las primeras 50 h y luego según programa)",
-                        "Lubricar varillaje del cucharón"
+                    "🛞 Tren de rodaje": [
+                        "Inspeccionar tensión de la cadena de orugas"
                     ]
                 }
             },
-            "100h": {
-                "label": "100 horas de servicio",
+            "250h": {
+                "label": "250 horas de servicio",
                 "bloques": {
-                    "⚙️ Herramienta / martillo hidráulico": [
-                        "Reemplazar filtro de aceite del martillo hidráulico (si aplica)",
-                        "Lubricar nuevamente varillaje del cucharón si corresponde"
+                    "🛢️ Motor": [
+                        "Cambiar aceite y filtro del motor"
                     ]
                 }
             },
             "500h": {
-                "label": "Primeras 500 horas de servicio",
+                "label": "500 horas de servicio",
                 "bloques": {
-                    "🧊 Sistema de enfriamiento": [
-                        "Obtener muestra de refrigerante del sistema de enfriamiento"
-                    ],
-                    "🛢️ Motor": [
-                        "Cambiar aceite y filtro del motor"
-                    ],
-                    "⚙️ Mandos finales y rotación": [
-                        "Cambiar aceite del mando final",
-                        "Cambiar aceite del mando de rotación"
-                    ]
-                }
-            },
-            "500h_2": {
-                "label": "Cada 500 horas de servicio",
-                "bloques": {
-                    "⚙️ Pluma, brazo y estructura": [
-                        "Lubricar varillaje de la pluma y del brazo",
-                        "Inspeccionar pluma, brazo y estructura (Boom, Stick and Frame)"
-                    ],
-                    "🛢️ Motor y mandos finales": [
-                        "Obtener muestra de aceite del motor",
-                        "Revisar nivel de aceite del mando final",
-                        "Obtener muestra de aceite del mando final"
-                    ],
-                    "🧮 Sistema hidráulico y rotación": [
-                        "Obtener muestra de aceite del sistema hidráulico",
-                        "Revisar nivel de aceite del acoplamiento de la bomba",
-                        "Lubricar cojinete de la rotación",
-                        "Revisar nivel de aceite del mando de rotación",
-                        "Obtener muestra de aceite del mando de rotación"
+                    "🧮 Sistema hidráulico": [
+                        "Obtener muestra de aceite del sistema hidráulico"
                     ]
                 }
             },
             "1000h": {
                 "label": "1000 horas de servicio",
                 "bloques": {
-                    "🔋 Sistema eléctrico": [
-                        "Limpiar batería",
-                        "Apretar sujeción de la batería"
-                    ],
-                    "🔧 Correas": [
-                        "Inspeccionar/ajustar/reemplazar correas"
-                    ],
-                    "🛢️ Motor": [
-                        "Cambiar aceite y filtro del motor"
-                    ],
-                    "⛽ Combustible": [
-                        "Reemplazar elemento de filtro primario del sistema de combustible (separador de agua)",
-                        "Reemplazar filtro secundario del sistema de combustible"
-                    ],
-                    "⚙️ Rotación": [
-                        "Cambiar aceite del mando de rotación"
+                    "🧮 Sistema hidráulico": [
+                        "Reemplazar filtro de aceite del sistema hidráulico"
                     ]
                 }
             },
@@ -596,11 +373,6 @@ PLAN_MANTENIMIENTO = {
                 "bloques": {
                     "🧊 Sistema de enfriamiento": [
                         "Obtener muestra de refrigerante del sistema de enfriamiento"
-                    ],
-                    "⚙️ Mandos finales y rotación": [
-                        "Cambiar aceite del mando final",
-                        "Reemplazar filtro de la tapa del tanque de combustible",
-                        "Lubricar engranaje de la rotación"
                     ]
                 }
             },
@@ -623,60 +395,25 @@ PLAN_MANTENIMIENTO = {
             "6000h": {
                 "label": "6000 horas de servicio o cada 3 años",
                 "bloques": {
-                    "🧮 Sistema hidráulico": [
-                        "Cambiar aceite del sistema hidráulico"
-                    ],
                     "🧊 Sistema de enfriamiento": [
-                        "Agregar prolongador de vida útil de refrigerante en el sistema de enfriamiento (ELC)"
+                        "Agregar prolongador de vida útil del refrigerante (ELC)"
                     ]
                 }
             },
             "largo_plazo": {
-                "label": "Intervalos largos (3 años, 5000 h, 10 000 h, 12 000 h y tareas condicionales)",
+                "label": "Intervalos largos (10 000 h, 12 000 h y tareas anuales)",
                 "bloques": {
-                    "🛡️ Seguridad": [
-                        "Reemplazar cinturón de seguridad cada 3 años"
+                    "🧊 Sistema de enfriamiento y refrigerante": [
+                        "Obtener muestra de refrigerante cada año",
+                        "Cambiar refrigerante ELC cada 12 000 horas o 6 años"
                     ],
-                    "🧊 Sistema de enfriamiento": [
-                        "Cambiar refrigerante del sistema de enfriamiento (ELC) cada 12 000 horas o 6 años"
-                    ],
-                    "🧪 Sistema de emisiones y combustible": [
-                        "Reemplazar filtro de fluido de escape diésel (cada 5 000 horas)",
-                        "Limpiar filtro de partículas para combustible diésel",
-                        "Cambiar aceite del acoplamiento de la bomba (5 000 horas)",
-                        "Reemplazar secador receptor (refrigerante) cada 5 000 horas",
+                    "🧪 Sistema de emisiones DEF": [
                         "Reemplazar filtros del múltiple de DEF cada 10 000 horas"
                     ],
                     "🔁 Tareas cuando sea necesario": [
-                        "Inspeccionar/reemplazar filtro de aire del acondicionador/calentador de cabina (recirculación)",
-                        "Revisar nivel de electrolito de baterías",
-                        "Inspeccionar/reemplazar batería o cable de batería",
-                        "Inspeccionar cáncamo de levantamiento del cucharón",
-                        "Inspeccionar/ajustar varillaje del cucharón",
-                        "Inspeccionar/reemplazar puntas del cucharón",
-                        "Limpiar/reemplazar filtro de aire de cabina (aire fresco)",
-                        "Limpiar cámara",
-                        "Limpiar condensador (refrigerante)",
-                        "Limpiar rejilla del tubo de llenado de DEF",
-                        "Drenar fluido de escape de combustible diésel",
-                        "Llenar fluido de escape diésel",
-                        "Reemplazar elementos del filtro de aire del motor",
-                        "Reemplazar cilindro del auxiliar de arranque con éter",
-                        "Limpiar calcomanía (identificación del producto)",
-                        "Cebar sistema de combustible",
-                        "Limpiar colador del tanque de combustible",
-                        "Reemplazar fusibles",
-                        "Purgar sistema hidráulico cuando corresponda",
-                        "Reemplazar luz LED",
-                        "Reemplazar filtro de aceite del martillo hidráulico cuando corresponda",
-                        "Inspeccionar filtro de aceite",
-                        "Limpiar radiador, posenfriador y núcleos del enfriador de aceite",
-                        "Inspeccionar Estructura de Protección en Caso de Vuelcos (ROPS)",
-                        "Ajustar cadena de orugas",
-                        "Revisar tren de rodaje",
-                        "Llenar depósito del lavaparabrisas",
-                        "Inspeccionar/reemplazar limpiaparabrisas",
-                        "Limpiar ventanas y parabrisas"
+                        "Limpiar/revisar batería",
+                        "Reemplazar batería o cables si es necesario",
+                        "Limpiar filtro de aire de la cabina"
                     ]
                 }
             },
@@ -684,9 +421,8 @@ PLAN_MANTENIMIENTO = {
                 "label": "Resumen general del programa de mantenimiento",
                 "bloques": {
                     "📋 Recordatorios generales": [
-                        "Utilizar horas de servicio, consumo de combustible, kilometraje o tiempo de calendario (lo que ocurra primero) para definir los intervalos.",
+                        "Utilizar horas de servicio, combustible, kilometraje o tiempo para definir los intervalos.",
                         "Antes de efectuar las tareas de un intervalo consecutivo, realizar también las tareas de los intervalos anteriores.",
-                        "Si no se cumplen las horas de servicio, realizar entre 10 y 100 horas al menos cada 3 meses; entre 250 y 500 horas al menos cada 6 meses; entre 1 000 y 2 500 horas al menos una vez al año.",
                         "Seguir siempre las instrucciones de seguridad, advertencias y regulaciones de emisiones indicadas por el fabricante."
                     ]
                 }
@@ -699,51 +435,26 @@ PLAN_MANTENIMIENTO = {
     # =======================================================
     "tractor": {
         "nombre": "Tractor",
-        "link": "https://sis2.cat.com/#/detail?keyword=Maintenance+Interval+Schedule&infoType=13&serviceMediaNumber=SEBU9087&serviceIeSystemControlNumber=i06105405&tab=service",
+        "link": "https://sis2.cat.com/#/detail?keyword=Maintenance+Interval+Schedule&infoType=13&serviceMediaNumber=M0082498&serviceIeSystemControlNumber=i07103988&tab=service",
         "intervalos": {
             "diario_10h": {
                 "label": "Cada día / 10 horas de servicio",
                 "bloques": {
-                    "🛡️ Seguridad y controles": [
-                        "Probar alarma de retroceso",
-                        "Probar sistema de frenos",
-                        "Probar bocina",
-                        "Inspeccionar cinturón de seguridad"
-                    ],
-                    "🧊 Cabina y aire": [
-                        "Limpiar/inspeccionar/reemplazar filtro de la cabina (aire fresco)"
-                    ],
                     "🛢️ Motor y enfriamiento": [
-                        "Revisar nivel de refrigerante del sistema de enfriamiento",
-                        "Revisar nivel de aceite del motor"
+                        "Revisar nivel de aceite del motor",
+                        "Revisar nivel de refrigerante del sistema de enfriamiento"
                     ],
-                    "⛽ Combustible": [
-                        "Drenar filtro primario del sistema de combustible (separador de agua)",
-                        "Drenar agua y sedimentos del tanque de combustible"
-                    ],
-                    "🧮 Sistemas hidráulico y tren de fuerza": [
-                        "Revisar nivel de aceite del sistema hidráulico",
-                        "Revisar nivel de aceite del eje pivote",
-                        "Revisar nivel de aceite del sistema de tren de fuerza"
-                    ],
-                    "⚙️ Tren de rodaje": [
-                        "Limpiar tren de rodaje (undercarriage)"
+                    "🛡️ Seguridad": [
+                        "Inspeccionar cinturón de seguridad",
+                        "Verificar funcionamiento de alarmas"
                     ]
                 }
             },
             "50h": {
                 "label": "50 horas de servicio",
                 "bloques": {
-                    "⚙️ Hoja topadora y desgarrador": [
-                        "Lubricar cilindros de inclinación y tirante de inclinación de la hoja topadora",
-                        "Lubricar cojinetes de la horquilla del cilindro de levantamiento",
-                        "Lubricar cojinetes del cilindro y del varillaje del desgarrador"
-                    ],
-                    "⚙️ Tren de rodaje": [
-                        "Inspeccionar pasadores de cadena"
-                    ],
-                    "🧊 Cabina": [
-                        "Limpiar/inspeccionar/reemplazar filtro de la cabina (recirculación)"
+                    "🛞 Tren de rodaje": [
+                        "Inspeccionar tensión de la cadena y rodillos"
                     ]
                 }
             },
@@ -751,146 +462,66 @@ PLAN_MANTENIMIENTO = {
                 "label": "250 horas de servicio",
                 "bloques": {
                     "🛢️ Motor": [
-                        "Obtener muestra de aceite del motor"
-                    ],
-                    "⚙️ Barra compensadora y mandos finales": [
-                        "Revisar nivel de aceite de los pasadores de extremo de la barra compensadora",
-                        "Revisar nivel de aceite del mando final"
-                    ],
-                    "⚙️ Cadena y cabrestante": [
-                        "Revisar/ajustar cadena",
-                        "Lubricar rodillos guiacables del cabrestante",
-                        "Revisar nivel de aceite del cabrestante"
+                        "Cambiar aceite y filtro del motor"
                     ]
                 }
             },
             "500h": {
-                "label": "500 horas iniciales y cada 500 horas de servicio",
+                "label": "500 horas de servicio",
                 "bloques": {
-                    "🧊 Sistema de enfriamiento": [
-                        "Obtener muestra de refrigerante del sistema de enfriamiento (nivel 2) – 500 h iniciales"
-                    ],
-                    "⚙️ Cabrestante": [
-                        "Cambiar/limpiar respiradero y aceite del cabrestante (500 h iniciales)"
-                    ],
-                    "🛢️ Motor y combustible": [
-                        "Cambiar aceite del motor y filtro (cada 500 horas)",
-                        "Limpiar/reemplazar filtro primario del sistema de combustible",
-                        "Reemplazar filtro secundario del sistema de combustible",
-                        "Reemplazar/limpiar colador y filtro de la tapa del tanque de combustible"
-                    ],
-                    "🧮 Sistemas hidráulico y tren de fuerza": [
-                        "Obtener muestra de aceite del sistema hidráulico",
-                        "Limpiar respiradero del tren de fuerza",
-                        "Obtener muestra de aceite del sistema de tren de fuerza"
-                    ],
-                    "⚙️ Mandos finales y tensores": [
-                        "Obtener muestra de aceite del mando final",
-                        "Inspeccionar/limpiar protector de sello del mando final",
-                        "Revisar nivel de aceite del compartimiento del resorte tensor"
-                    ],
-                    "🔧 Correas": [
-                        "Inspeccionar/reemplazar correas"
+                    "🧮 Sistema hidráulico": [
+                        "Obtener muestra de aceite del sistema hidráulico"
                     ]
                 }
             },
             "1000h": {
                 "label": "1000 horas de servicio",
                 "bloques": {
-                    "🧮 Sistema hidráulico y tren de fuerza": [
-                        "Reemplazar filtros de aceite del sistema hidráulico",
-                        "Reemplazar filtro de aceite del tren de fuerza",
-                        "Reemplazar filtro de carga de la dirección"
-                    ]
-                }
-            },
-            "1000h_2": {
-                "label": "1000 horas de servicio o cada 6 meses",
-                "bloques": {
-                    "🔋 Sistema eléctrico y tren de fuerza": [
-                        "Inspeccionar batería",
-                        "Cambiar/limpiar rejillas y aceite del sistema de tren de fuerza",
-                        "Inspeccionar Estructura de Protección en Caso de Vuelcos (ROPS)",
-                        "Cambiar/limpiar respiradero y aceite del cabrestante"
+                    "🧮 Sistema hidráulico": [
+                        "Reemplazar filtro de aceite del sistema hidráulico"
                     ]
                 }
             },
             "2000h": {
-                "label": "2000 horas de servicio o cada año",
+                "label": "2000 horas de servicio",
                 "bloques": {
                     "🧊 Sistema de enfriamiento": [
-                        "Obtener muestra de refrigerante del sistema de enfriamiento (nivel 2)"
-                    ],
-                    "⚙️ Estructura y tren de rodaje": [
-                        "Inspeccionar barra compensadora y montajes del motor",
-                        "Cambiar aceite del mando final",
-                        "Reemplazar empaque del protector del sello del mando final",
-                        "Cambiar aceite del sistema hidráulico",
-                        "Inspeccionar unión del pasador protector del radiador",
-                        "Inspeccionar bastidor de rodillos de la cadena",
-                        "Inspeccionar guías del bastidor de rodillos de cadenas"
+                        "Obtener muestra de refrigerante del sistema de enfriamiento"
                     ]
                 }
             },
-            "2500h": {
-                "label": "2500 horas de servicio",
+            "3000h": {
+                "label": "3000 horas de servicio",
                 "bloques": {
-                    "🛢️ Motor y combustible": [
-                        "Inspeccionar/ajustar inyector unitario electrónico",
-                        "Revisar/ajustar juego de válvulas del motor"
+                    "🧮 Sistema hidráulico": [
+                        "Reemplazar filtro de aceite del sistema hidráulico (retorno)"
                     ]
                 }
             },
             "6000h": {
                 "label": "6000 horas de servicio o cada 3 años",
                 "bloques": {
+                    "🧮 Sistema hidráulico": [
+                        "Cambiar aceite del sistema hidráulico"
+                    ],
                     "🧊 Sistema de enfriamiento": [
-                        "Agregar prolongador de vida útil de refrigerante del sistema de enfriamiento (ELC)",
-                        "Reemplazar termostato del agua del sistema de enfriamiento"
+                        "Agregar prolongador de vida útil del refrigerante (ELC)"
                     ]
                 }
             },
             "largo_plazo": {
-                "label": "Intervalos largos (2 años, 3 años, 5000 h, 10 000 h, 12 000 h y tareas condicionales)",
+                "label": "Intervalos largos (3 años, 5000 h, 10 000 h, 12 000 h y tareas condicionales)",
                 "bloques": {
-                    "🧊 Aire acondicionado": [
-                        "Reemplazar secador de refrigerante cada 2 años"
-                    ],
                     "🛡️ Seguridad": [
                         "Reemplazar cinturón de seguridad cada 3 años"
                     ],
-                    "🧪 Sistema de emisiones": [
-                        "Limpiar bujía de encendido del ARD (cada 5 000 h)",
-                        "Reemplazar filtro de fluido de escape diésel (cada 5 000 h)",
-                        "Reemplazar inyector de fluido de escape diésel (cada 5 000 h)",
-                        "Limpiar filtro de partículas para combustible diésel (cada 5 000 h)",
-                        "Reemplazar filtros del múltiple de DEF (cada 10 000 h)"
-                    ],
                     "🧊 Sistema de enfriamiento": [
-                        "Cambiar refrigerante del sistema de enfriamiento (ELC) cada 12 000 horas o 6 años"
+                        "Cambiar refrigerante ELC cada 12 000 horas o 6 años"
                     ],
                     "🔁 Tareas cuando sea necesario": [
-                        "Reemplazar batería, cable de batería o interruptor de desconexión de la batería",
-                        "Limpiar protector inferior (potencia)",
-                        "Limpiar/ajustar cámara",
-                        "Limpiar núcleos de enfriamiento",
-                        "Limpiar rejilla del tubo de llenado de DEF",
-                        "Llenar fluido de escape diésel",
-                        "Reemplazar elementos de filtro de aire del motor",
-                        "Limpiar antefiltro de aire del motor",
-                        "Reemplazar cilindro del auxiliar de arranque con éter",
-                        "Limpiar film de identificación del producto",
-                        "Revisar posición de la rueda loca delantera",
-                        "Reemplazar/reajustar fusibles y disyuntores",
-                        "Limpiar rejilla de derivación del filtro del sistema hidráulico",
-                        "Inspeccionar filtro de aceite",
-                        "Limpiar/reemplazar tapa de presión del radiador",
-                        "Inspeccionar/reemplazar punta del desgarrador y protector del vástago",
-                        "Limpiar rejilla de barrido del convertidor de par",
-                        "Instalar cable de acero del cabrestante",
-                        "Llenar depósito del lavaparabrisas",
-                        "Inspeccionar/reemplazar limpiaparabrisas",
-                        "Limpiar ventanas"
+                        "Revisar tren de rodaje",
+                        "Inspeccionar Estructura de Protección en Caso de Vuelcos (ROPS)",
+                        "Limpiar radiador, posenfriador y núcleos del enfriador de aceite"
                     ]
                 }
             },
@@ -898,9 +529,7 @@ PLAN_MANTENIMIENTO = {
                 "label": "Resumen general del programa de mantenimiento",
                 "bloques": {
                     "📋 Recordatorios generales": [
-                        "Utilizar horas de servicio, consumo de combustible, kilometraje o tiempo de calendario (lo que ocurra primero) para definir los intervalos.",
                         "Antes de efectuar las tareas de un intervalo consecutivo, realizar también las tareas de los intervalos anteriores.",
-                        "Si no se cumplen las horas de servicio, seguir los criterios de tiempo mínimos recomendados.",
                         "Seguir siempre las instrucciones de seguridad, advertencias y regulaciones de emisiones indicadas por el fabricante."
                     ]
                 }
@@ -908,8 +537,9 @@ PLAN_MANTENIMIENTO = {
         }
     }
 }
+
 # ============================================================
-#  CONSULTAS SQL
+#  QUERIES A BASE DE DATOS
 # ============================================================
 def query_codigo(model, serial3, cid, fmi):
     sql = """
@@ -928,7 +558,6 @@ def query_codigo(model, serial3, cid, fmi):
     conn.close()
     return rows
 
-
 def query_evento(model, serial3, eid, level):
     sql = """
         SELECT warning_description, url_main
@@ -946,9 +575,8 @@ def query_evento(model, serial3, eid, level):
     conn.close()
     return rows
 
-
 # ============================================================
-#  CONTACTOS
+# CONTACTOS PARA PDF
 # ============================================================
 CONTACTOS_SOPORTE = [
     {"zona": "Piura", "correo": "servicios.piura@empresa.com", "telefono": "+51 999 111 111"},
@@ -959,26 +587,23 @@ CONTACTOS_SOPORTE = [
     {"zona": "Cajamarca", "correo": "servicios.cajamarca@empresa.com", "telefono": "+51 999 666 666"},
 ]
 
-
 # ============================================================
-#  GENERAR PDF
+#  GENERAR PDF (XHTML2PDF)
 # ============================================================
 def generar_pdf(html_string):
     pdf_bytes = BytesIO()
     pisa.CreatePDF(html_string, dest=pdf_bytes)
     return pdf_bytes.getvalue()
 
-
 # ============================================================
-#  RUTA HOME
+#  RUTA PRINCIPAL
 # ============================================================
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
 # ============================================================
-#  RUTA PARA PDF
+#  RUTA PDF DIRECTO
 # ============================================================
 @app.route("/generar_reporte", methods=["POST"])
 def generar_reporte():
@@ -995,12 +620,12 @@ def generar_reporte():
     )
 
     pdf_bytes = generar_pdf(html)
+
     return Response(
         pdf_bytes,
         mimetype="application/pdf",
         headers={"Content-Disposition": "attachment; filename=FerreyDoc_Reporte.pdf"}
     )
-
 
 # ============================================================
 #  CHATBOT PRINCIPAL
@@ -1015,6 +640,7 @@ def enviar():
     ses = obtener_sesion(user_id)
     estado = ses["estado"]
 
+    # -------- Función responder() interna --------
     def responder(texto, extra=None):
         texto = f"<div style='max-width:100%; word-wrap:break-word;'>{texto}</div>"
         payload = {"respuesta": texto}
@@ -1022,82 +648,93 @@ def enviar():
             payload.update(extra)
         return jsonify(payload)
 
-    # RESET con "hola"
+    # ========= RESET GLOBAL CON "hola" =========
     if mensaje.lower() == "hola":
         resetear_sesion(user_id)
         ses = obtener_sesion(user_id)
         ses["estado"] = "esperando_consentimiento"
         return responder(
-            "👋 ¡Hola, soy <b>FerreyDoc</b>!<br>"
-            "¿Aceptas proporcionar datos del equipo?<br>"
+            "👋 ¡Hola, soy <b>FerreyDoc</b>, tu asistente técnico CAT.<br><br>"
+            "Estoy diseñado para orientarte respecto a Códigos y Eventos<br>"
+            "Además puedo brindarte consejos acerca del Mantenimiento de tu Equipo<br>"
+            "Antes de comenzar necesitaré unos datos<br>"
+            "¿Estás de acuerdo con brindar información sobre tu equipo CAT?<br>"
             "1️⃣ Sí<br>2️⃣ No"
         )
 
-    # ======================= INICIO =========================
+    # ===================== BIENVENIDA =====================
     if estado == "inicio":
         ses["estado"] = "esperando_consentimiento"
         return responder(
-            "👋 ¡Hola, soy <b>FerreyDoc</b>!<br>"
-            "¿Aceptas proporcionar datos del equipo?<br>"
+            "👋 ¡Hola, soy <b>FerreyDoc</b>, tu asistente técnico CAT.<br><br>"
+            "Estoy diseñado para orientarte respecto a Códigos y Eventos<br>"
+            "Además puedo brindarte consejos acerca del Mantenimiento de tu Equipo<br>"
+            "Antes de comenzar necesitaré unos datos<br>"
+            "¿Estás de acuerdo con brindar información sobre tu equipo CAT?<br>"
             "1️⃣ Sí<br>2️⃣ No"
         )
 
-    # ======================= CONSENTIMIENTO =================
+    # ================= CONSENTIMIENTO =====================
     if estado == "esperando_consentimiento":
         if mensaje == "1":
             ses["estado"] = "pidiendo_modelo"
-            return responder("Perfecto 🙌<br>Ingresa el <b>MODELO</b> (ej: 950H).")
+            return responder("Perfecto 🙌<br>Ingresa el <b>MODELO</b> (ej: 950H, 320D).")
+
         if mensaje == "2":
             resetear_sesion(user_id)
             return responder("Ok 👍<br>Escribe <b>hola</b> si deseas volver.")
+
         return responder("Debes responder 1 o 2.")
 
-    # ======================= MODELO =========================
+    # ===================== MODELO =====================
     if estado == "pidiendo_modelo":
         ses["model"] = mensaje.upper()
         ses["estado"] = "pidiendo_serie"
         return responder(
             f"Modelo registrado: <b>{ses['model']}</b><br>"
-            "Ahora ingresa los <b>3 primeros dígitos</b> de la serie."
+            "Ahora ingresa los <b>primeros 3 dígitos</b> de la serie."
         )
 
-    # ======================= SERIE ==========================
+    # ===================== SERIE ======================
     if estado == "pidiendo_serie":
         ses["serial3"] = mensaje[:3].upper()
         ses["estado"] = "menu_principal"
         return responder(
             f"✔ Modelo: <b>{ses['model']}</b><br>"
             f"✔ Serie: <b>{ses['serial3']}</b><br><br>"
-            "MENÚ PRINCIPAL:<br>"
+            "A continuación, escribe el número de la consulta que deseas realizar:<br>"
             "1️⃣ Códigos<br>"
             "2️⃣ Eventos<br>"
-            "3️⃣ Mantenimiento<br>"
-            "4️⃣ Diferencia Código vs Evento<br>"
+            "3️⃣ Consejos de Mantenimiento Preventivo<br>"
+            "4️⃣ ¿Cómo diferencio un Código de un Evento?<br>"
             "5️⃣ Cambiar máquina<br>"
             "6️⃣ Finalizar<br>"
-            "7️⃣ Generar PDF"
         )
 
-    # ==========================================================
-    #               MENÚ PRINCIPAL
-    # ==========================================================
+    # ==================== MENU PRINCIPAL ====================
     if estado == "menu_principal":
 
         if mensaje == "1":
             ses["estado"] = "pidiendo_codigos"
-            return responder("Ingresa CID/FMI. Ej: 168-4")
+            return responder(
+                "Por favor escribe el código CID/FMI del que necesitas información. "
+                "Puedes ingresar hasta 5 códigos separados por coma.<br>"
+                "Ej: 168-4"
+            )
 
         if mensaje == "2":
             ses["estado"] = "pidiendo_eventos"
             return responder(
-                "Formato obligatorio: <b>E####(L)</b><br>"
+                "Por favor escribe el evento EID/Level del que necesitas información. "
+                "Puedes ingresar hasta 5 eventos separados por coma.<br>"
+                "Formato obligatorio: <b>E####(L)</b> con L = 1, 2 o 3.<br>"
                 "Ej: E0117(2)"
             )
 
         if mensaje == "3":
             ses["estado"] = "mant_elegir_maquina"
             return responder(
-                "Selecciona maquinaria:<br>"
+                "Selecciona el tipo de maquinaria:<br>"
                 "1️⃣ Rodillo<br>"
                 "2️⃣ Cargador<br>"
                 "3️⃣ Excavadora<br>"
@@ -1105,36 +742,32 @@ def enviar():
                 "9️⃣ Volver"
             )
 
-        # ==================== OPCIÓN 4 — DIF COD/EVENTO ====================
         if mensaje == "4":
             ses["estado"] = "explicando_cod_evento"
-
-            ruta_local = "/static/ejemplos/codigos_eventos.jpg"
-            ruta_local_jpeg = "/static/ejemplos/codigos_eventos.jpeg"
-
             return responder(
-                "<b>¿Diferencia entre un Código y un Evento?</b><br><br>"
+                "<b>¿Cuál es la diferencia entre un Código y un Evento?</b><br><br>"
                 "<b>🔧 Código (CID/FMI):</b><br>"
-                "• Ej: 4651-9<br>"
-                "• Falla mecánica o eléctrica puntual.<br><br>"
+                "• Formato: <b>XXXX-Y</b>.<br>"
+                "• Ejemplo: <b>4651-9</b>.<br>"
+                "• Describe una <u>falla mecánica o eléctrica puntual</u>.<br><br>"
                 "<b>📘 Evento (EID/Level):</b><br>"
-                "• Ej: E60104(2)<br>"
-                "• Condición operativa o mal uso detectado.<br><br>"
-                "Ejemplo real:<br><br>"
-                f"<img src='{ruta_local}' onerror=\"this.src='{ruta_local_jpeg}'\" "
-                "style='max-width:100%; border-radius:6px;'>"
-                "<br><br>"
-                "1️⃣ Volver al menú principal"
+                "• Formato: <b>E#####(L)</b>.<br>"
+                "• Ejemplo: <b>E60104(2)</b>.<br>"
+                "• Describe una <u>condición operativa o mal uso detectado</u>.<br><br>"
+                "Aquí tienes un ejemplo real sobre cómo aparece en pantalla:<br><br>"
+                "Escribe <b>1</b> para volver al menú principal.",
+                extra={"imagen": "/static/ejemplos/codigos_eventos.jpeg"}
             )
 
         if mensaje == "5":
             resetear_sesion(user_id)
-            return responder("Ingresa el nuevo modelo.")
+            return responder("Ingresa el nuevo <b>MODELO</b>.")
 
         if mensaje == "6":
             resetear_sesion(user_id)
             return responder("Gracias por usar FerreyDoc 🤝")
 
+        # ============= GENERAR PDF =============
         if mensaje == "7":
 
             html = render_template(
@@ -1150,94 +783,117 @@ def enviar():
             pdf_bytes = generar_pdf(html)
             pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
+            # Resetear historial tras generar reporte
             ses["reporte_codigos"] = []
             ses["reporte_eventos"] = []
 
             return responder(
-                "📄 Tu PDF está listo.",
+                "📄 Tu reporte PDF está listo para descargar.",
                 {"pdf_base64": pdf_b64, "filename": "FerreyDoc_Reporte.pdf"}
             )
 
-        return responder("Opción inválida. Usa 1–7.")
+        return responder("Elige una opción válida (1–7).")
 
-
-    # ==========================================================
-    #     ESTADO: EXPLICANDO COD/EVENTO (RETORNO SEGURO)
-    # ==========================================================
+    # ========== EXPLICACIÓN CÓDIGO vs EVENTO ==========
     if estado == "explicando_cod_evento":
         if mensaje == "1":
             ses["estado"] = "menu_principal"
             return responder(
-                "MENÚ PRINCIPAL:<br>"
+                "¿Qué deseas hacer?<br>"
                 "1️⃣ Códigos<br>"
                 "2️⃣ Eventos<br>"
-                "3️⃣ Mantenimiento<br>"
-                "4️⃣ Diferencia Código vs Evento<br>"
+                "3️⃣ Consejos de Mantenimiento Preventivo<br>"
+                "4️⃣ ¿Cómo diferencio un Código de un Evento?<br>"
                 "5️⃣ Cambiar máquina<br>"
                 "6️⃣ Finalizar<br>"
-                "7️⃣ Generar PDF"
+                "7️⃣ Generar reporte PDF<br>"
             )
-        return responder("Ingresa 1 para volver.")
+        return responder(
+            "Si ya revisaste el ejemplo, escribe <b>1</b> para volver al menú principal."
+        )
 
-
-    # ==========================================================
-    #     MANTENIMIENTO — MAQUINA
-    # ==========================================================
+    # ==================== MANTENIMIENTO — ELEGIR MÁQUINA ====================
     if estado == "mant_elegir_maquina":
 
         if mensaje == "1":
             ses["mant_maquina"] = "rodillo"
+
         elif mensaje == "2":
             ses["mant_maquina"] = "cargador"
+
         elif mensaje == "3":
             ses["mant_maquina"] = "excavadora"
+
         elif mensaje == "4":
             ses["mant_maquina"] = "tractor"
+
         elif mensaje == "9":
             ses["estado"] = "menu_principal"
             return responder(
+                "¿Qué deseas hacer?<br>"
                 "1️⃣ Códigos<br>"
                 "2️⃣ Eventos<br>"
-                "3️⃣ Mantenimiento<br>"
-                "4️⃣ Dif Código/Eventos<br>"
+                "3️⃣ Consejos de Mantenimiento Preventivo<br>"
+                "4️⃣ ¿Cómo diferencio un Código de un Evento?<br>"
                 "5️⃣ Cambiar máquina<br>"
                 "6️⃣ Finalizar<br>"
-                "7️⃣ PDF"
+                "7️⃣ Generar reporte PDF<br>"
             )
-        else:
-            return responder("Opción inválida (1–4 o 9).")
 
+        else:
+            return responder("Selecciona una opción válida (1–4 o 9).")
+
+        # Si eligió máquina válida
         ses["estado"] = "mant_elegir_intervalo"
         maquina = ses["mant_maquina"]
         info = PLAN_MANTENIMIENTO.get(maquina)
 
+        if not info:
+            return responder("❌ No existe plan de mantenimiento para esa máquina.")
+
+        # Construcción dinámica del menú de intervalos
         lista = ""
         claves = list(info["intervalos"].keys())
-        ses["mant_intervalos_lista"] = claves
+        ses["mant_intervalos_lista"] = claves  # guardamos orden real
 
         i = 1
         for clave in claves:
-            lista += f"{i}️⃣ {info['intervalos'][clave]['label']}<br>"
+            etiqueta = info["intervalos"][clave]["label"]
+            lista += f"{i}️⃣ {etiqueta}<br>"
             i += 1
 
+        total = len(claves)
         return responder(
-            f"📘 <b>{info['nombre']}</b><br><br>"
-            f"Selecciona intervalo:<br><br>{lista}<br>"
-            "0️⃣ Volver"
+            f"📘 <b>Plan de mantenimiento — {info['nombre']}</b><br><br>"
+            f"Selecciona el intervalo:<br><br>{lista}<br>"
+            f"0️⃣ Volver al menú de máquinas"
         )
 
-
-    # ==========================================================
-    #     MANTENIMIENTO — INTERVALO
-    # ==========================================================
+    # ==================== MANTENIMIENTO — ELEGIR INTERVALO ====================
     if estado == "mant_elegir_intervalo":
-
         intervalos = ses.get("mant_intervalos_lista") or []
         maquina = ses.get("mant_maquina")
 
+        # Si se rompió el contexto, devolvemos al menú principal
+        if not intervalos or not maquina:
+            ses["estado"] = "menu_principal"
+            return responder(
+                "Hubo un problema leyendo los intervalos de mantenimiento. "
+                "Te regreso al menú principal.<br><br>"
+                "1️⃣ Códigos<br>"
+                "2️⃣ Eventos<br>"
+                "3️⃣ Mantenimiento<br>"
+                "4️⃣ Dif. código vs evento<br>"
+                "5️⃣ Cambiar máquina<br>"
+                "6️⃣ Finalizar<br>"
+                "7️⃣ Generar PDF"
+            )
+
+        # Volver al menú de selección de máquina
         if mensaje == "0":
             ses["estado"] = "mant_elegir_maquina"
             return responder(
+                "Selecciona el tipo de maquinaria:<br>"
                 "1️⃣ Rodillo<br>"
                 "2️⃣ Cargador<br>"
                 "3️⃣ Excavadora<br>"
@@ -1245,45 +901,59 @@ def enviar():
                 "9️⃣ Volver"
             )
 
+        # Validar input numérico
         if not mensaje.isdigit():
-            return responder("Opción inválida.")
+            total = len(intervalos)
+            return responder(f"Selecciona una opción válida (1–{total} o 0).")
 
         opcion = int(mensaje)
         total = len(intervalos)
 
         if opcion < 1 or opcion > total:
-            return responder("Opción fuera de rango.")
+            return responder(f"Selecciona una opción válida (1–{total} o 0).")
 
-        clave = intervalos[opcion-1]
-        ses["mant_intervalo"] = clave
+        clave_intervalo = intervalos[opcion - 1]
+        ses["mant_intervalo"] = clave_intervalo
 
         info = PLAN_MANTENIMIENTO.get(maquina)
-        data = info["intervalos"].get(clave)
+        if not info:
+            ses["estado"] = "menu_principal"
+            return responder("❌ No existe plan de mantenimiento para esa máquina.")
 
-        texto = (
-            f"📘 <b>{info['nombre']}</b><br>"
-            f"<b>Intervalo:</b> {data['label']}<br><br>"
+        data_intervalo = info["intervalos"].get(clave_intervalo)
+        if not data_intervalo:
+            ses["estado"] = "menu_principal"
+            return responder("❌ No encontré el intervalo seleccionado.")
+
+        bloques = data_intervalo.get("bloques", {})
+
+        texto_resp = (
+            f"📘 <b>Plan de mantenimiento — {info['nombre']}</b><br><br>"
+            f"<b>Intervalo:</b> {data_intervalo['label']}<br><br>"
         )
 
-        for titulo, tareas in data["bloques"].items():
-            texto += f"{titulo}:<br>"
+        for titulo, tareas in bloques.items():
+            texto_resp += f"{titulo}:<br>"
             for t in tareas:
-                texto += f"• {t}<br>"
-            texto += "<br>"
+                texto_resp += f"• {t}<br>"
+            texto_resp += "<br>"
 
-        texto += (
-            f"<b>Manual oficial:</b> "
-            f"<a href='{info['link']}' target='_blank'>{info['link']}</a><br><br>"
-            f"Selecciona otro intervalo (1–{total}) o 0️⃣ Volver."
+        link_manual = info.get("link")
+        if link_manual:
+            texto_resp += (
+                "<b>Consulta más detalles en el manual oficial:</b><br>"
+                f"<a href=\"{link_manual}\" target=\"_blank\">{link_manual}</a><br><br>"
+            )
+
+        # Permitir seguir consultando más intervalos
+        ses["estado"] = "mant_elegir_intervalo"
+        texto_resp += (
+            f"Selecciona otro intervalo (1–{total}) o 0️⃣ Volver al menú de máquinas."
         )
 
-        ses["estado"] = "mant_elegir_intervalo"
-        return responder(texto)
+        return responder(texto_resp)
 
-
-    # ==========================================================
-    #     CÓDIGOS
-    # ==========================================================
+    # ================= CÓDIGOS =================
     if estado == "pidiendo_codigos":
 
         model = ses["model"]
@@ -1294,6 +964,7 @@ def enviar():
         ses["reporte_codigos"] = []
 
         for raw in codigos_raw:
+
             raw = raw.strip()
             mid, cid, fmi = extraer_codigo(raw)
 
@@ -1323,9 +994,9 @@ def enviar():
             })
 
             respuestas.append(
-                f"🔧 <b>Código:</b> {raw}<br>"
-                f"<b>Descripción:</b> {desc}<br>"
-                f"<b>Causas:</b> {causas}<br>"
+                f"🔧 <b>Código:</b> {raw}<br><br>"
+                f"<b>Descripción:</b> {desc}<br><br>"
+                f"<b>Causas:</b> {causas}<br><br>"
                 f"<b>Más información:</b> {url_html}"
             )
 
@@ -1333,17 +1004,15 @@ def enviar():
 
         return responder(
             "<br><br>".join(respuestas) +
-            "<br><br>1️⃣ Más códigos<br>"
+            "<br><br>¿Qué deseas hacer?<br>"
+            "1️⃣ Más códigos<br>"
             "2️⃣ Eventos<br>"
             "3️⃣ Mantenimiento<br>"
-            "7️⃣ PDF<br>"
+            "7️⃣ Generar PDF<br>"
             "6️⃣ Finalizar"
         )
 
-
-    # ==========================================================
-    #     EVENTOS
-    # ==========================================================
+    # ================= EVENTOS =================
     if estado == "pidiendo_eventos":
 
         model = ses["model"]
@@ -1355,16 +1024,19 @@ def enviar():
 
         for raw in eventos_raw:
             raw = raw.strip()
+
             eid, level = extraer_evento(raw)
 
+            # Validación estricta del formato único
             if not eid or not level:
                 respuestas.append(
                     f"❌ Formato inválido para {raw}. "
-                    f"Debe ser E####(L). Ej: E0117(2)"
+                    f"Usa el formato <b>E####(L)</b> con L = 1, 2 o 3. Ej: E0117(2)"
                 )
                 continue
 
             filas = query_evento(model, serial3, eid, level)
+
             if not filas:
                 respuestas.append(f"❌ No encontré datos para {raw}")
                 continue
@@ -1372,7 +1044,6 @@ def enviar():
             fila = filas[0]
             desc = fila["warning_description"] or "Sin descripción."
             url = fila["url_main"] or ""
-
             url_html = f'<a href="{url}" target="_blank">{url}</a>' if url else "—"
 
             ses["reporte_eventos"].append({
@@ -1384,8 +1055,8 @@ def enviar():
             })
 
             respuestas.append(
-                f"📘 <b>Evento:</b> {raw}<br>"
-                f"<b>Descripción:</b> {desc}<br>"
+                f"📘 <b>Evento:</b> {raw}<br><br>"
+                f"<b>Descripción:</b> {desc}<br><br>"
                 f"<b>Más información:</b> {url_html}"
             )
 
@@ -1393,17 +1064,15 @@ def enviar():
 
         return responder(
             "<br><br>".join(respuestas) +
-            "<br><br>1️⃣ Códigos<br>"
+            "<br><br>¿Qué deseas hacer?<br>"
+            "1️⃣ Códigos<br>"
             "2️⃣ Más eventos<br>"
             "3️⃣ Mantenimiento<br>"
-            "7️⃣ PDF<br>"
+            "7️⃣ Generar PDF<br>"
             "6️⃣ Finalizar"
         )
 
-
     return responder("No entendí 😅<br>Escribe <b>hola</b> para reiniciar.")
-
-
 
 # ============================================================
 # MAIN
