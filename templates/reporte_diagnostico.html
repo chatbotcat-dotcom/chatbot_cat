@@ -81,6 +81,15 @@
     .bold {
         font-weight: bold;
     }
+
+td.small {
+    word-break: break-all;
+    overflow-wrap: break-word;
+    white-space: normal !important;
+    max-width: 200px;
+    display: block;
+}
+ 
 </style>
 
 </head>
@@ -118,13 +127,15 @@
         <td>{{ c.raw }}</td>
         <td>{{ c.descripcion }}</td>
         <td>{{ c.causas }}</td>
-        <td class="small">
-            {% if c.url %}
-                <a href="{{ c.url }}">{{ c.url }}</a>
-            {% else %}
-                —
-            {% endif %}
-        </td>
+<td class="small">
+    {% if c.url %}
+        <a href="{{ c.url }}">{{ c.url }}</a>
+    {% else %}
+        —
+    {% endif %}
+</td>
+
+        
     </tr>
     {% endfor %}
 </table>
