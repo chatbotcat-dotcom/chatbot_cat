@@ -82,6 +82,26 @@ function addBotMessage(text) {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
+/* ---------- NUEVO: descargar PDF desde base64 ---------- */
+function descargarPdfDesdeBase64(pdfBase64, filename) {
+    const byteCharacters = atob(pdfBase64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "FerreyDoc_Reporte.pdf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 function addUserMessage(text) {
     const hora = horaActual();
     chatBox.innerHTML += `
@@ -111,7 +131,23 @@ async function enviarMensaje() {
 
     typingIndicator.classList.add("hidden");
 
-    if (data.respuesta) addBotMessage(data.respuesta);
+    // Construimos la respuesta del bot manteniendo el HTML original del backend
+    let respuestaTexto = data.respuesta || "";
+
+    // Si el backend manda una imagen explicativa, la agregamos debajo del texto
+    if (data.imagen) {
+        const imagenHtml = `<br><img src="${data.imagen}" class="bot-extra-img">`;
+        respuestaTexto += imagenHtml;
+    }
+
+    if (respuestaTexto) {
+        addBotMessage(respuestaTexto);
+    }
+
+    // Si llega un PDF en base64, disparamos la descarga
+    if (data.pdf_base64) {
+        descargarPdfDesdeBase64(data.pdf_base64, data.filename);
+    }
 }
 
 inputMensaje.addEventListener("keydown", function (event) {
