@@ -64,6 +64,12 @@ html, body {
     color: #888;
 }
 
+/* Opcionales iconos header */
+.header-icons .icon {
+    margin-left: 12px;
+    font-size: 18px;
+}
+
 /* ============================================
    ÁREA SCROLL DEL CHAT (solo este hace scroll)
 ============================================ */
@@ -100,6 +106,15 @@ html, body {
     padding: 12px 14px;
     border-radius: 18px;
     font-size: 14px;
+}
+
+/* NUEVO: imagen explicativa dentro del mensaje del bot */
+.bot-extra-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin-top: 8px;
+    border-radius: 8px;
 }
 
 .msg-time-left {
